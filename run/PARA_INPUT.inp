@@ -1,0 +1,45 @@
+&meshes
+nx = 256
+ny = 256
+nz = 256
+/
+
+&origin
+ox = -0.5d0
+oy = -0.5d0
+oz = -0.5d0
+/
+
+&length
+lx = 1.0d0
+ly = 1.0d0
+lz = 1.0d0
+/
+
+&mesh_stretch
+ax = 1.0d0
+ay = 1.0d0
+az = 1.0d0
+/
+
+&procs
+npx = 2
+npy = 2
+npz = 2
+/
+
+&control
+maxiteration = 10
+tolerance = 1.0d-12
+number_of_vcycles = 100
+number_of_levels = 4
+aggregation_method = 0
+aggregation_level = 0
+omega_sor = 1.6d0
+/
+
+&coefficients
+alpha_x = 1.0d0
+alpha_y = 1.0d0
+alpha_z = 1.0d0
+/
