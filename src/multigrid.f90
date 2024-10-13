@@ -1683,7 +1683,7 @@ module multigrid
             call geometry_halocell_update_selectively(mg_sdm(1)%x, mg_sdm(1), mg_sdm(1)%is_aggregated)
             call multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm(1)%x, sdm, mg_sdm(1), 0)
             sol = sol + rsd
-            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, mg_sdm(l)%is_aggregated)
+            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm%is_aggregated)
             call multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm%is_aggregated)
             call vv_dot_3d_matrix(rsd_val, rsd, rsd, sdm%nx, sdm%ny, sdm%nz, sdm%is_aggregated)
             if(myrank.eq.0) print '(a,i4,a,3(e15.7,x))', '[MG] cycle = ',cyc,', Error:',sqrt(rsd_val), sqrt(res0tol), sqrt(rsd_val/res0tol)
@@ -1911,7 +1911,7 @@ module multigrid
             call geometry_halocell_update_selectively(mg_sdm(1)%x, mg_sdm(1), mg_sdm(1)%is_aggregated)
             call multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm(1)%x, sdm, mg_sdm(1), 0)
             sol = sol + rsd
-            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, mg_sdm(l)%is_aggregated)
+            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm%is_aggregated)
 
             call multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm%is_aggregated)
             call vv_dot_3d_matrix(rsd_val, rsd, rsd, sdm%nx, sdm%ny, sdm%nz, sdm%is_aggregated)
@@ -2247,7 +2247,7 @@ module multigrid
             call geometry_halocell_update_selectively(mg_sdm(1)%x, mg_sdm(1), mg_sdm(1)%is_aggregated)
             call multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm(1)%x, sdm, mg_sdm(1), 0)
             sol = sol + rsd
-            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, mg_sdm(l)%is_aggregated)
+            call rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm%is_aggregated)
 
             call multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm%is_aggregated)
             call vv_dot_3d_matrix(rsd_val, rsd, rsd, sdm%nx, sdm%ny, sdm%nz, sdm%is_aggregated)
