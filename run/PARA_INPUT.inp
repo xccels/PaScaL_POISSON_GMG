@@ -11,9 +11,9 @@ oz = -0.5d0
 /
 
 &length
-lx = 1.0d0
-ly = 1.0d0
-lz = 1.0d0
+lx = 2.0d0
+ly = 2.0d0
+lz = 2.0d0
 /
 
 &mesh_stretch
