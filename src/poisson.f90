@@ -76,16 +76,16 @@ program main
     allocate( ref_sub(0:s_domain%nx+1, 0:s_domain%ny+1, 0:s_domain%nz+1) )
     ref_sub(:,:,:) = 0.0d0
 
-    ! Problem 1 : cosine function over -0.5 <= x,y,z <=0.5
+    ! Problem 1 : cosine function over -0.5 <= x,y,z <=1.5
     do k = 1, s_domain%nz
         do j = 1, s_domain%ny
             do i = 1, s_domain%nx
-                s_domain%x(i, j, k) = 1.0d0
-                s_domain%b(i, j, k) =-cos(s_domain%xg(i)/lx*PI) &
-                                     *cos(s_domain%yg(j)/ly*PI) &
-                                     *cos(s_domain%zg(k)/lz*PI) &
-                                     *PI*PI*(lx*lx+ly*ly+lz*lz)
-                ref_sub(i, j, k) =  cos(s_domain%xg(i)/lx*PI)*cos(s_domain%yg(j)/ly*PI)*cos(s_domain%zg(k)/lz*PI)
+                s_domain%x(i, j, k) = 0.0d0
+                s_domain%b(i, j, k) =-cos(s_domain%xg(i)*PI) &
+                                     *cos(s_domain%yg(j)*PI) &
+                                     *cos(s_domain%zg(k)*PI) &
+                                     *3.0*PI*PI
+                ref_sub(i, j, k) =  cos(s_domain%xg(i)*PI)*cos(s_domain%yg(j)*PI)*cos(s_domain%zg(k)*PI)
             enddo
         enddo
     enddo
