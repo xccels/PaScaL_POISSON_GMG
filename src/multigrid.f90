@@ -1071,6 +1071,7 @@ module multigrid
         enddo
 
         deallocate(mg_sdm)
+        deallocate(mg_a_poisson)
 
     end subroutine multigrid_destroy
 
