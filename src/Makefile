@@ -1,6 +1,6 @@
 HOME = ..
 include $(HOME)/Makefile.inc
-EXE = a.out  # Executable name without path
+EXE = core.exe  # Executable name without path
 
 OBJDIR = ./obj
 SRC_DIR = ./src  # Assuming your source files are in the 'src' directory
