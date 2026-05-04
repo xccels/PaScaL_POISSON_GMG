@@ -4,10 +4,8 @@ module multigrid
     use mpi
     use geometry
     use matrix
-    use cg_poisson_matrix
     use rbgs_poisson_matrix
     use poisson_matrix_operator
-    use multigrid_common
 
     implicit none
 
@@ -988,9 +986,9 @@ module multigrid
             allocate(mg_sdm(l)%dym(0:ny+1))
             allocate(mg_sdm(l)%dyg(0:ny+1))
             allocate(mg_sdm(l)%yg(0:ny+1))
-            mg_sdm(l)%dym = 0.0d0
-            mg_sdm(l)%dyg = 0.0d0
-            mg_sdm(l)%yg = 0.0d0
+            ! mg_sdm(l)%dym = 0.0d0
+            ! mg_sdm(l)%dyg = 0.0d0
+            ! mg_sdm(l)%yg = 0.0d0
 
             call multigrid_subdomain_aggregation_make_grid(mg_sdm(l)%dym, mg_sdm(l)%dyg, mg_sdm(l)%yg, ny, &
                                                             dym_f, dyg_f, yg_f, sdm%oy, &
@@ -1015,9 +1013,9 @@ module multigrid
             allocate(mg_sdm(l)%dzm(0:nz+1))
             allocate(mg_sdm(l)%dzg(0:nz+1))
             allocate(mg_sdm(l)%zg(0:nz+1))
-            mg_sdm(l)%dzm = 0.0d0
-            mg_sdm(l)%dzg = 0.0d0
-            mg_sdm(l)%zg = 0.0d0
+            ! mg_sdm(l)%dzm = 0.0d0
+            ! mg_sdm(l)%dzg = 0.0d0
+            ! mg_sdm(l)%zg = 0.0d0
 
             call multigrid_subdomain_aggregation_make_grid(mg_sdm(l)%dzm, mg_sdm(l)%dzg, mg_sdm(l)%zg, nz, &
                                                             dzm_f, dzg_f, zg_f, sdm%oz, &
@@ -1116,7 +1114,9 @@ module multigrid
         integer(kind=4)                 :: nx_c, ny_c, nz_c
         real(kind=8)                    :: vol_f(2,2,2), vol_c
         real(kind=8), allocatable       :: dxf(:), dyf(:), dzf(:)
+ 
 
+      
         val_c = 0.0d0
 
         allocate(dxf(0:dm_f%nx+1))
@@ -1637,10 +1637,12 @@ module multigrid
 
         real(kind=8), allocatable               :: rsd(:,:,:)
         real(kind=8)                            :: rsd_val, res0tol
-        integer(kind=4)     :: l, cyc
+        integer(kind=4)     :: l, cyc, nx, ny, nz
 
         allocate( rsd(0:sdm%nx+1, 0:sdm%ny+1, 0:sdm%nz+1))
         rsd(:,:,:) = 0.0d0
+
+        nx = size(rhs,1)
 
         call multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm%is_aggregated)
         call vv_dot_3d_matrix(res0tol, rsd, rsd, sdm%nx, sdm%ny, sdm%nz, sdm%is_aggregated)
@@ -1958,6 +1960,8 @@ module multigrid
         ! MPI_Gatherv/MPI_Scatterv instead of MPI_reduce
         integer(kind=4)                             :: ddtype_temp1
         integer(kind=4), target                     :: ddtype_send_x, ddtype_gatherv_x
+        integer(kind=4), target                     :: ddtype_send_y, ddtype_gatherv_y
+        integer(kind=4), target                     :: ddtype_send_z, ddtype_gatherv_z
         integer(kind=4), pointer                    :: ddtype_send_max_ptr, ddtype_gatherv_max_ptr
         integer(kind=4), pointer                    :: ddtype_send_med_ptr, ddtype_gatherv_med_ptr
         integer(kind=4), pointer                    :: ddtype_send_min_ptr, ddtype_gatherv_min_ptr
@@ -1969,11 +1973,13 @@ module multigrid
         integer(kind=4)                             :: ix, iy, iz
         integer(kind=MPI_ADDRESS_KIND)              :: extent, lb
         integer(kind=4), allocatable, dimension(:), target  :: cnt_gatherv_x, disps_gatherv_x
+        integer(kind=4), allocatable, dimension(:), target  :: cnt_gatherv_y, disps_gatherv_y
+        integer(kind=4), allocatable, dimension(:), target  :: cnt_gatherv_z, disps_gatherv_z
         integer(kind=4), dimension(:), pointer              :: cnt_gatherv_max_ptr, disps_gatherv_max_ptr
         integer(kind=4), dimension(:), pointer              :: cnt_gatherv_med_ptr, disps_gatherv_med_ptr
         integer(kind=4), dimension(:), pointer              :: cnt_gatherv_min_ptr, disps_gatherv_min_ptr
-        integer(kind=4), allocatable, dimension(:), target  :: cnt_scatterv_x
-        integer(kind=4), allocatable, dimension(:), target  :: disps_scatterv_x
+        integer(kind=4), allocatable, dimension(:), target  :: cnt_scatterv_x, cnt_scatterv_y, cnt_scatterv_z
+        integer(kind=4), allocatable, dimension(:), target  :: disps_scatterv_x, disps_scatterv_y, disps_scatterv_z
         integer(kind=4), allocatable, dimension(:,:):: cart_coord
 
         !============= for communication  ============
@@ -2022,6 +2028,98 @@ module multigrid
             cnt_gatherv_x(i) = 1
             disps_gatherv_x(i) = nx * i
         enddo
+!=============!=============!=============!=============!=============!=============!=============!=============
+        allocate(cnt_gatherv_y(0:comm_1d_y%nprocs-1))
+        allocate(disps_gatherv_y(0:comm_1d_y%nprocs-1))
+
+        nx_aggr = mg_sdm(lv_aggregation_y)%nx
+        ny_aggr = mg_sdm(lv_aggregation_y)%ny
+        nz_aggr = mg_sdm(lv_aggregation_y)%nz
+
+        nx = nx_aggr 
+        ny = ny_aggr / comm_1d_y%nprocs
+        nz = nz_aggr
+
+        ix = 0
+        iy = ny * comm_1d_y%myrank
+        iz = 0
+        ! print *, nx_aggr, nx, ny, nz, ix
+
+        ! For MPI_Gatherv
+        sizes    = (/nx+2, ny_aggr+2, nz+2/)
+        subsizes = (/nx, ny, nz/)
+        starts   = (/1, iy+1, 1/)
+
+        call MPI_Type_create_subarray(3, sizes, subsizes, starts, MPI_ORDER_FORTRAN, &
+                                    MPI_REAL8, ddtype_temp1, ierr)
+        CALL MPI_Type_size(MPI_REAL8, r8size, ierr)
+        lb = 0
+        extent = r8size
+        call MPI_Type_create_resized(ddtype_temp1, lb, extent, ddtype_send_y, ierr)
+        call MPI_Type_commit(ddtype_send_y, ierr)
+
+        sizes    = (/nx+2, ny_aggr+2, nz+2/)
+        subsizes = (/nx, ny, nz/)
+        starts   = (/1, 1, 1/)
+
+        call MPI_Type_create_subarray(3, sizes, subsizes, starts, MPI_ORDER_FORTRAN, &
+                                    MPI_REAL8, ddtype_temp1, ierr)
+        CALL MPI_Type_size(MPI_REAL8, r8size, ierr)
+        lb = 0
+        extent = r8size
+        call MPI_Type_create_resized(ddtype_temp1, lb, extent, ddtype_gatherv_y, ierr)
+        call MPI_Type_commit(ddtype_gatherv_y, ierr)
+
+        do i = 0, comm_1d_y%nprocs-1
+            cnt_gatherv_y(i) = 1
+            disps_gatherv_y(i) = ny * i *(nx+2)
+        enddo
+!=============!=============!=============!=============!=============!=============!=============!=============
+        allocate(cnt_gatherv_z(0:comm_1d_z%nprocs-1))
+        allocate(disps_gatherv_z(0:comm_1d_z%nprocs-1))
+
+        nx_aggr = mg_sdm(lv_aggregation_z)%nx
+        ny_aggr = mg_sdm(lv_aggregation_z)%ny
+        nz_aggr = mg_sdm(lv_aggregation_z)%nz
+
+        nx = nx_aggr 
+        ny = ny_aggr
+        nz = nz_aggr / comm_1d_z%nprocs
+
+        ix = 0
+        iy = 0
+        iz = nz * comm_1d_z%myrank
+        ! print *, nx_aggr, nx, ny, nz, ix
+
+        ! For MPI_Gatherv
+        sizes    = (/nx+2, ny+2, nz_aggr+2/)
+        subsizes = (/nx, ny, nz/)
+        starts   = (/1, 1, iz+1/)
+
+        call MPI_Type_create_subarray(3, sizes, subsizes, starts, MPI_ORDER_FORTRAN, &
+                                    MPI_REAL8, ddtype_temp1, ierr)
+        CALL MPI_Type_size(MPI_REAL8, r8size, ierr)
+        lb = 0
+        extent = r8size
+        call MPI_Type_create_resized(ddtype_temp1, lb, extent, ddtype_send_z, ierr)
+        call MPI_Type_commit(ddtype_send_z, ierr)
+
+        sizes    = (/nx+2, ny+2, nz_aggr+2/)
+        subsizes = (/nx, ny, nz/)
+        starts   = (/1, 1, 1/)
+
+        call MPI_Type_create_subarray(3, sizes, subsizes, starts, MPI_ORDER_FORTRAN, &
+                                    MPI_REAL8, ddtype_temp1, ierr)
+        CALL MPI_Type_size(MPI_REAL8, r8size, ierr)
+        lb = 0
+        extent = r8size
+        call MPI_Type_create_resized(ddtype_temp1, lb, extent, ddtype_gatherv_z, ierr)
+        call MPI_Type_commit(ddtype_gatherv_z, ierr)
+
+        do i = 0, comm_1d_z%nprocs-1
+            cnt_gatherv_z(i) = 1
+            disps_gatherv_z(i) = nz * i *(nx+2)*(ny+2)
+        enddo
 
         !============= for communication  ============
 
@@ -2039,6 +2137,14 @@ module multigrid
                     ddtype_gatherv_max_ptr => ddtype_gatherv_x
                     cnt_gatherv_max_ptr => cnt_gatherv_x
                     disps_gatherv_max_ptr => disps_gatherv_x
+                    ddtype_send_med_ptr => ddtype_send_y
+                    ddtype_gatherv_med_ptr => ddtype_gatherv_y
+                    cnt_gatherv_med_ptr => cnt_gatherv_y
+                    disps_gatherv_med_ptr => disps_gatherv_y
+                    ddtype_send_min_ptr => ddtype_send_z
+                    ddtype_gatherv_min_ptr => ddtype_gatherv_z
+                    cnt_gatherv_min_ptr => cnt_gatherv_z
+                    disps_gatherv_min_ptr => disps_gatherv_z
                     max = 'x'
                     med = 'y'
                     min = 'z'
@@ -2054,6 +2160,14 @@ module multigrid
                     ddtype_gatherv_max_ptr => ddtype_gatherv_x
                     cnt_gatherv_max_ptr => cnt_gatherv_x
                     disps_gatherv_max_ptr => disps_gatherv_x
+                    ddtype_send_med_ptr => ddtype_send_z
+                    ddtype_gatherv_med_ptr => ddtype_gatherv_z
+                    cnt_gatherv_med_ptr => cnt_gatherv_z
+                    disps_gatherv_med_ptr => disps_gatherv_z
+                    ddtype_send_min_ptr => ddtype_send_y
+                    ddtype_gatherv_min_ptr => ddtype_gatherv_y
+                    cnt_gatherv_min_ptr => cnt_gatherv_y
+                    disps_gatherv_min_ptr => disps_gatherv_y
                     max = 'x'
                     med = 'z'
                     min = 'y'
@@ -2066,10 +2180,18 @@ module multigrid
                 comm_max_ptr => comm_1d_z
                 comm_med_ptr => comm_1d_x
                 comm_min_ptr => comm_1d_y
+                ddtype_send_max_ptr => ddtype_send_z
+                ddtype_gatherv_max_ptr => ddtype_gatherv_z
+                cnt_gatherv_max_ptr => cnt_gatherv_z
+                disps_gatherv_max_ptr => disps_gatherv_z
                 ddtype_send_med_ptr => ddtype_send_x
                 ddtype_gatherv_med_ptr => ddtype_gatherv_x
                 cnt_gatherv_med_ptr => cnt_gatherv_x
                 disps_gatherv_med_ptr => disps_gatherv_x
+                ddtype_send_min_ptr => ddtype_send_y
+                ddtype_gatherv_min_ptr => ddtype_gatherv_y
+                cnt_gatherv_min_ptr => cnt_gatherv_y
+                disps_gatherv_min_ptr => disps_gatherv_y
                 max = 'z'
                 med = 'x'
                 min = 'y'
@@ -2084,10 +2206,18 @@ module multigrid
                     comm_max_ptr => comm_1d_y
                     comm_med_ptr => comm_1d_x
                     comm_min_ptr => comm_1d_z
+                    ddtype_send_max_ptr => ddtype_send_y
+                    ddtype_gatherv_max_ptr => ddtype_gatherv_y
+                    cnt_gatherv_max_ptr => cnt_gatherv_y
+                    disps_gatherv_max_ptr => disps_gatherv_y
                     ddtype_send_med_ptr => ddtype_send_x
                     ddtype_gatherv_med_ptr => ddtype_gatherv_x
                     cnt_gatherv_med_ptr => cnt_gatherv_x
                     disps_gatherv_med_ptr => disps_gatherv_x
+                    ddtype_send_min_ptr => ddtype_send_z
+                    ddtype_gatherv_min_ptr => ddtype_gatherv_z
+                    cnt_gatherv_min_ptr => cnt_gatherv_z
+                    disps_gatherv_min_ptr => disps_gatherv_z
                     max = 'y'
                     med = 'x'
                     min = 'z'
@@ -2099,6 +2229,14 @@ module multigrid
                     comm_max_ptr => comm_1d_y
                     comm_med_ptr => comm_1d_z
                     comm_min_ptr => comm_1d_x
+                    ddtype_send_max_ptr => ddtype_send_y
+                    ddtype_gatherv_max_ptr => ddtype_gatherv_y
+                    cnt_gatherv_max_ptr => cnt_gatherv_y
+                    disps_gatherv_max_ptr => disps_gatherv_y
+                    ddtype_send_med_ptr => ddtype_send_z
+                    ddtype_gatherv_med_ptr => ddtype_gatherv_z
+                    cnt_gatherv_med_ptr => cnt_gatherv_z
+                    disps_gatherv_med_ptr => disps_gatherv_z
                     ddtype_send_min_ptr => ddtype_send_x
                     ddtype_gatherv_min_ptr => ddtype_gatherv_x
                     cnt_gatherv_min_ptr => cnt_gatherv_x
@@ -2115,6 +2253,14 @@ module multigrid
                 comm_max_ptr => comm_1d_z
                 comm_med_ptr => comm_1d_y
                 comm_min_ptr => comm_1d_x
+                ddtype_send_max_ptr => ddtype_send_z
+                ddtype_gatherv_max_ptr => ddtype_gatherv_z
+                cnt_gatherv_max_ptr => cnt_gatherv_z
+                disps_gatherv_max_ptr => disps_gatherv_z
+                ddtype_send_med_ptr => ddtype_send_y
+                ddtype_gatherv_med_ptr => ddtype_gatherv_y
+                cnt_gatherv_med_ptr => cnt_gatherv_y
+                disps_gatherv_med_ptr => disps_gatherv_y
                 ddtype_send_min_ptr => ddtype_send_x
                 ddtype_gatherv_min_ptr => ddtype_gatherv_x
                 cnt_gatherv_min_ptr => cnt_gatherv_x
@@ -2147,12 +2293,17 @@ module multigrid
                 call multigrid_restriction(mg_sdm(l+1)%b, mg_sdm(l)%r, mg_sdm(l+1), mg_sdm(l),l)
                 if(myrank.eq.0) print '(a,i2,a,i2)', '[MG] Restricton from level ',l,' to level ',l+1
             enddo
-
+  
             allocate(tmp(0:size(mg_sdm(lv_aggr_min_ptr)%b, 1)-1,0:size(mg_sdm(lv_aggr_min_ptr)%b,2)-1,0:size(mg_sdm(lv_aggr_min_ptr)%b,3)-1))
             tmp = 0.0d0
-            call MPI_Reduce(mg_sdm(lv_aggr_min_ptr)%b(0,0,0), tmp(0,0,0), size(mg_sdm(lv_aggr_min_ptr)%b), MPI_DOUBLE_PRECISION, MPI_SUM, 0, comm_min_ptr%mpi_comm, ierr)
+            ! call MPI_Reduce(mg_sdm(lv_aggr_min_ptr)%b(0,0,0), tmp(0,0,0), size(mg_sdm(lv_aggr_min_ptr)%b), MPI_DOUBLE_PRECISION, MPI_SUM, 0, comm_min_ptr%mpi_comm, ierr)
+            call MPI_Gatherv(mg_sdm(lv_aggr_min_ptr)%b(0,0,0), 1, ddtype_send_min_ptr, tmp(0,0,0), cnt_gatherv_min_ptr, disps_gatherv_min_ptr, ddtype_gatherv_min_ptr, 0, comm_min_ptr%mpi_comm, ierr)
             mg_sdm(lv_aggr_min_ptr)%b = tmp
             deallocate(tmp)
+
+            if(myrank.eq.0) print '(a,i2,a,i2)', '[lv_aggr_min_ptr] ',lv_aggr_min_ptr
+            if(myrank.eq.0) print '(a,i2,a,i2)', '[lv_aggr_med_ptr] ',lv_aggr_med_ptr
+            if(myrank.eq.0) print '(a,i2,a,i2)', '[lv_aggr_max_ptr] ',lv_aggr_max_ptr
 
             if(comm_min_ptr%myrank.eq.0) then
 
@@ -2166,7 +2317,8 @@ module multigrid
     
                 allocate(tmp(0:size(mg_sdm(lv_aggr_med_ptr)%b, 1)-1,0:size(mg_sdm(lv_aggr_med_ptr)%b,2)-1,0:size(mg_sdm(lv_aggr_med_ptr)%b,3)-1))
                 tmp = 0.0d0
-                call MPI_Reduce(mg_sdm(lv_aggr_med_ptr)%b(0,0,0), tmp(0,0,0), size(mg_sdm(lv_aggr_med_ptr)%b), MPI_DOUBLE_PRECISION, MPI_SUM, 0, comm_med_ptr%mpi_comm, ierr)
+                ! call MPI_Reduce(mg_sdm(lv_aggr_med_ptr)%b(0,0,0), tmp(0,0,0), size(mg_sdm(lv_aggr_med_ptr)%b), MPI_DOUBLE_PRECISION, MPI_SUM, 0, comm_med_ptr%mpi_comm, ierr)
+                call MPI_Gatherv(mg_sdm(lv_aggr_med_ptr)%b(0,0,0), 1, ddtype_send_med_ptr, tmp(0,0,0), cnt_gatherv_med_ptr, disps_gatherv_med_ptr, ddtype_gatherv_med_ptr, 0, comm_med_ptr%mpi_comm, ierr)
                 mg_sdm(lv_aggr_med_ptr)%b = tmp
                 deallocate(tmp)
     
@@ -2183,7 +2335,7 @@ module multigrid
                     allocate(tmp(0:size(mg_sdm(lv_aggr_max_ptr)%b, 1)-1,0:size(mg_sdm(lv_aggr_max_ptr)%b,2)-1,0:size(mg_sdm(lv_aggr_max_ptr)%b,3)-1))
                     tmp = 1.0d0
                     ! call MPI_Reduce(mg_sdm(lv_aggr_max_ptr)%b(0,0,0), tmp(0,0,0), size(mg_sdm(lv_aggr_max_ptr)%b), MPI_DOUBLE_PRECISION, MPI_SUM, 0, comm_max_ptr%mpi_comm, ierr)
-                    call MPI_Gatherv(mg_sdm(lv_aggr_max_ptr)%b(0,0,0), 1, ddtype_send_x, tmp(0,0,0), cnt_gatherv_x, disps_gatherv_x, ddtype_gatherv_x, 0, comm_1d_x%mpi_comm, ierr)
+                    call MPI_Gatherv(mg_sdm(lv_aggr_max_ptr)%b(0,0,0), 1, ddtype_send_max_ptr, tmp(0,0,0), cnt_gatherv_max_ptr, disps_gatherv_max_ptr, ddtype_gatherv_max_ptr, 0, comm_max_ptr%mpi_comm, ierr)
                     mg_sdm(lv_aggr_max_ptr)%b = tmp
                     deallocate(tmp)
         
@@ -2217,7 +2369,11 @@ module multigrid
                         enddo
                     endif
 
-                    call MPI_Bcast(mg_sdm(lv_aggr_max_ptr)%x, size(mg_sdm(lv_aggr_max_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_max_ptr%mpi_comm, ierr)
+                    ! call MPI_Bcast(mg_sdm(lv_aggr_max_ptr)%x, size(mg_sdm(lv_aggr_max_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_max_ptr%mpi_comm, ierr)
+                    allocate(tmp(0:size(mg_sdm(lv_aggr_max_ptr)%x, 1)-1,0:size(mg_sdm(lv_aggr_max_ptr)%x,2)-1,0:size(mg_sdm(lv_aggr_max_ptr)%x,3)-1))
+                    tmp = mg_sdm(lv_aggr_max_ptr)%x
+                    call MPI_Scatterv(tmp(0,0,0), cnt_gatherv_max_ptr, disps_gatherv_max_ptr, ddtype_gatherv_max_ptr, mg_sdm(lv_aggr_max_ptr)%x(0,0,0), 1, ddtype_send_max_ptr, 0, comm_max_ptr%mpi_comm, ierr)
+                    deallocate(tmp)
                     do l = lv_aggr_max_ptr-1, lv_aggr_med_ptr, -1
                         call geometry_halocell_update_selectively(mg_sdm(l+1)%x, mg_sdm(l+1), mg_sdm(l+1)%is_aggregated)
                         call multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm(l)%r, mg_sdm(l+1)%x, mg_sdm(l), mg_sdm(l+1),l)
@@ -2226,7 +2382,11 @@ module multigrid
                     enddo
                 endif
 
-                call MPI_Bcast(mg_sdm(lv_aggr_med_ptr)%x, size(mg_sdm(lv_aggr_med_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_med_ptr%mpi_comm, ierr)
+                ! call MPI_Bcast(mg_sdm(lv_aggr_med_ptr)%x, size(mg_sdm(lv_aggr_med_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_med_ptr%mpi_comm, ierr)
+                allocate(tmp(0:size(mg_sdm(lv_aggr_med_ptr)%x, 1)-1,0:size(mg_sdm(lv_aggr_med_ptr)%x,2)-1,0:size(mg_sdm(lv_aggr_med_ptr)%x,3)-1))
+                tmp = mg_sdm(lv_aggr_med_ptr)%x
+                call MPI_Scatterv(tmp(0,0,0), cnt_gatherv_med_ptr, disps_gatherv_med_ptr, ddtype_gatherv_med_ptr, mg_sdm(lv_aggr_med_ptr)%x(0,0,0), 1, ddtype_send_med_ptr, 0, comm_med_ptr%mpi_comm, ierr)
+                deallocate(tmp)
                 do l = lv_aggr_med_ptr-1, lv_aggr_min_ptr, -1
                     call geometry_halocell_update_selectively(mg_sdm(l+1)%x, mg_sdm(l+1), mg_sdm(l+1)%is_aggregated)
                     call multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm(l)%r, mg_sdm(l+1)%x, mg_sdm(l), mg_sdm(l+1),l)
@@ -2235,7 +2395,12 @@ module multigrid
                 enddo
             endif
 
-            call MPI_Bcast(mg_sdm(lv_aggr_min_ptr)%x, size(mg_sdm(lv_aggr_min_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_min_ptr%mpi_comm, ierr)
+
+            ! call MPI_Bcast(mg_sdm(lv_aggr_min_ptr)%x, size(mg_sdm(lv_aggr_min_ptr)%x), MPI_DOUBLE_PRECISION, 0, comm_min_ptr%mpi_comm, ierr)
+            allocate(tmp(0:size(mg_sdm(lv_aggr_min_ptr)%x, 1)-1,0:size(mg_sdm(lv_aggr_min_ptr)%x,2)-1,0:size(mg_sdm(lv_aggr_min_ptr)%x,3)-1))
+            tmp = mg_sdm(lv_aggr_min_ptr)%x
+            call MPI_Scatterv(tmp(0,0,0), cnt_gatherv_min_ptr, disps_gatherv_min_ptr, ddtype_gatherv_min_ptr, mg_sdm(lv_aggr_min_ptr)%x(0,0,0), 1, ddtype_send_min_ptr, 0, comm_min_ptr%mpi_comm, ierr)
+            deallocate(tmp)
 
             do l = lv_aggr_min_ptr-1, 1, -1
                 call geometry_halocell_update_selectively(mg_sdm(l+1)%x, mg_sdm(l+1), mg_sdm(l+1)%is_aggregated)

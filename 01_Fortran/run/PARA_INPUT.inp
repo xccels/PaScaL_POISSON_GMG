@@ -24,7 +24,7 @@ az = 1.0d0
 
 &procs
 npx = 2
-npy = 2
+npy = 4
 npz = 2
 /
 
@@ -32,8 +32,8 @@ npz = 2
 maxiteration = 10
 tolerance = 1.0d-12
 number_of_vcycles = 100
-number_of_levels = 4
-aggregation_method = 0
+number_of_levels = 8
+aggregation_method = 2
 aggregation_level = 0
 omega_sor = 1.6d0
 /

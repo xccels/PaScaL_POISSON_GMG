@@ -1,6 +1,6 @@
 HOME = ..
 include $(HOME)/Makefile.inc
-EXE = core.exe  # Executable name without path
+EXE = a.out  # Executable name without path
 
 OBJDIR = ./obj
 SRC_DIR = ./src  # Assuming your source files are in the 'src' directory
@@ -11,7 +11,7 @@ SRC_DIR = ./src  # Assuming your source files are in the 'src' directory
 
 # List of source modules without file extensions
 MODULES = para_range mpi_topology geometry matrix poisson_matrix_operator \
-          cg_poisson_matrix rbgs_poisson_matrix multigrid_common multigrid_vcycle \
+          rbgs_poisson_matrix \
           multigrid poisson
 
 # Generate object file paths
