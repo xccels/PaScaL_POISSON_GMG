@@ -49,7 +49,7 @@ program main
     namelist /control/ maxiteration, tolerance, number_of_vcycles, number_of_levels, aggregation_method, aggregation_level, omega_sor
     namelist /coefficients/ alpha_x, alpha_y, alpha_z
 
-    open (unit = 1, file = "PARA_INPUT/PARA_INPUT65536.inp")
+    open (unit = 1, file = "run/PARA_INPUT.inp")
     read (1, meshes)
     read (1, origin)
     read (1, length)
@@ -59,7 +59,8 @@ program main
     read (1, coefficients)
     close (1)
 
-    do times=1,20
+
+    do times=1,2
 
     np_dim(0)=npx
     np_dim(1)=npy
@@ -206,24 +207,24 @@ program main
     ! if(myrank.eq.0) print '(a,e20.10)','[Poisson] RMS = ',rms/g_domain%nx/g_domain%ny/g_domain%nz
     ! if(myrank.eq.0) print '(a,f12.6)', '[Poisson] Solution obtained. Execution time = ',MPI_Wtime()-t0
 
-    ! write(myfilename,'(a,i0.3)') './result/solution.',myrank
-    ! open(myrank, file=myfilename, form='formatted')
+    write(myfilename,'(a,i0.3)') './result/solution.',myrank
+    open(myrank, file=myfilename, form='formatted')
 
-    ! do k=0, s_domain%nz+1
-    !     do j=0, s_domain%ny+1
-    !         do i=0, s_domain%nx+1
-    !             write(myrank,101) s_domain%xg(i), s_domain%yg(j), s_domain%zg(k), s_domain%x(i,j,k), ref_sub(i,j,k), s_domain%b(i,j,k)
-    !         enddo
-    !     enddo
-    ! enddo
-    ! 101   format(3(f9.5,x),3(e15.7,x))
+    do k=0, s_domain%nz+1
+        do j=0, s_domain%ny+1
+            do i=0, s_domain%nx+1
+                write(myrank,101) s_domain%xg(i), s_domain%yg(j), s_domain%zg(k), s_domain%x(i,j,k), ref_sub(i,j,k), s_domain%b(i,j,k)
+            enddo
+        enddo
+    enddo
+    101   format(3(f9.5,x),3(e15.7,x))
 
-    ! close(myrank)
+    close(myrank)
 
-    ! call file_write
-    ! call binary_file_check
+    call file_write
+    call binary_file_check
 
-    ! if(myrank.eq.0) print '(a)', '[Poisson] Solution printed.'
+    if(myrank.eq.0) print '(a)', '[Poisson] Solution printed.'
 
     deallocate(ref_sub)
 
@@ -235,8 +236,7 @@ program main
     call geometry_domain_destroy(g_domain)
 
     if(myrank.eq.0) print '(a)', '[Poisson] Memory deallocated.'
-
-    enddo 
+enddo
 
     call MPI_Finalize(ierr)
 
