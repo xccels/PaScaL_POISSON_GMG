@@ -3,7 +3,7 @@
 
 #include "geometry.h"  // 引入 subdomain 结构体
 #include <stdbool.h>
-#include "global.h"
+// #include "global.h"
 
 typedef struct matrix_poisson_struct {
     int nx, ny, nz;
@@ -18,7 +18,29 @@ static inline double* COEFF(matrix_poisson *a, int m, int i, int j, int k) {
                      + k ];
 }
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ============================================================
+   CPU interfaces
+   ============================================================ */
+   
 void matrix_poisson_create(matrix_poisson *a_poisson, const subdomain *sdm);
 void matrix_poisson_destroy(matrix_poisson *a_poisson);
+
+
+/* ============================================================
+   GPU interfaces
+   ============================================================ */
+
+void matrix_poisson_create_gpu(matrix_poisson *a_poisson, const subdomain *sdm);
+void matrix_poisson_destroy_gpu(matrix_poisson *a_poisson);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // MATRIX_H

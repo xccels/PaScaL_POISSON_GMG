@@ -367,55 +367,6 @@ void geometry_subdomain_ddt_destroy(subdomain *sdm) {
     MPI_Type_free(&sdm->ddt_xy_plane_zn1);
 }
 
-// void geometry_halocell_update(double *u, subdomain *sdm) {
-//     extern cart_comm_1d comm_1d_x, comm_1d_y, comm_1d_z;
-
-//     MPI_Request request[4];
-
-//     // double *U = &u[0][0][0];
-
-//     // // x-direction
-//     // MPI_Isend(U, 1, sdm->ddt_yz_plane_xn,  comm_1d_x.east_rank, 111, comm_1d_x.mpi_comm, &request[0]);
-//     // MPI_Irecv(U, 1, sdm->ddt_yz_plane_x0,  comm_1d_x.west_rank, 111, comm_1d_x.mpi_comm, &request[1]);
-//     // MPI_Isend(U, 1, sdm->ddt_yz_plane_x1,  comm_1d_x.west_rank, 222, comm_1d_x.mpi_comm, &request[2]);
-//     // MPI_Irecv(U, 1, sdm->ddt_yz_plane_xn1, comm_1d_x.east_rank, 222, comm_1d_x.mpi_comm, &request[3]);
-//     // MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-
-//     // // y-direction
-//     // MPI_Isend(U, 1, sdm->ddt_xz_plane_yn,  comm_1d_y.east_rank, 333, comm_1d_y.mpi_comm, &request[0]);
-//     // MPI_Irecv(U, 1, sdm->ddt_xz_plane_y0,  comm_1d_y.west_rank, 333, comm_1d_y.mpi_comm, &request[1]);
-//     // MPI_Isend(U, 1, sdm->ddt_xz_plane_y1,  comm_1d_y.west_rank, 444, comm_1d_y.mpi_comm, &request[2]);
-//     // MPI_Irecv(U, 1, sdm->ddt_xz_plane_yn1, comm_1d_y.east_rank, 444, comm_1d_y.mpi_comm, &request[3]);
-//     // MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-
-//     // // z-direction
-//     // MPI_Isend(U, 1, sdm->ddt_xy_plane_zn,  comm_1d_z.east_rank, 555, comm_1d_z.mpi_comm, &request[0]);
-//     // MPI_Irecv(U, 1, sdm->ddt_xy_plane_z0,  comm_1d_z.west_rank, 555, comm_1d_z.mpi_comm, &request[1]);
-//     // MPI_Isend(U, 1, sdm->ddt_xy_plane_z1,  comm_1d_z.west_rank, 666, comm_1d_z.mpi_comm, &request[2]);
-//     // MPI_Irecv(U, 1, sdm->ddt_xy_plane_zn1, comm_1d_z.east_rank, 666, comm_1d_z.mpi_comm, &request[3]);
-//     // MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-
-//     // x-direction
-//     MPI_Isend(u, 1, sdm->ddt_yz_plane_xn,  comm_1d_x.east_rank, 111, comm_1d_x.mpi_comm, &request[0]);
-//     MPI_Irecv(u, 1, sdm->ddt_yz_plane_x0,  comm_1d_x.west_rank, 111, comm_1d_x.mpi_comm, &request[1]);
-//     MPI_Isend(u, 1, sdm->ddt_yz_plane_x1,  comm_1d_x.west_rank, 222, comm_1d_x.mpi_comm, &request[2]);
-//     MPI_Irecv(u, 1, sdm->ddt_yz_plane_xn1, comm_1d_x.east_rank, 222, comm_1d_x.mpi_comm, &request[3]);
-//     MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-
-//     // y-direction
-//     MPI_Isend(u, 1, sdm->ddt_xz_plane_yn,  comm_1d_y.east_rank, 333, comm_1d_y.mpi_comm, &request[0]);
-//     MPI_Irecv(u, 1, sdm->ddt_xz_plane_y0,  comm_1d_y.west_rank, 333, comm_1d_y.mpi_comm, &request[1]);
-//     MPI_Isend(u, 1, sdm->ddt_xz_plane_y1,  comm_1d_y.west_rank, 444, comm_1d_y.mpi_comm, &request[2]);
-//     MPI_Irecv(u, 1, sdm->ddt_xz_plane_yn1, comm_1d_y.east_rank, 444, comm_1d_y.mpi_comm, &request[3]);
-//     MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-
-//     // z-direction
-//     MPI_Isend(u, 1, sdm->ddt_xy_plane_zn,  comm_1d_z.east_rank, 555, comm_1d_z.mpi_comm, &request[0]);
-//     MPI_Irecv(u, 1, sdm->ddt_xy_plane_z0,  comm_1d_z.west_rank, 555, comm_1d_z.mpi_comm, &request[1]);
-//     MPI_Isend(u, 1, sdm->ddt_xy_plane_z1,  comm_1d_z.west_rank, 666, comm_1d_z.mpi_comm, &request[2]);
-//     MPI_Irecv(u, 1, sdm->ddt_xy_plane_zn1, comm_1d_z.east_rank, 666, comm_1d_z.mpi_comm, &request[3]);
-//     MPI_Waitall(4, request, MPI_STATUSES_IGNORE);
-// }
 
 void geometry_halocell_update_selectively(double *u, subdomain *sdm, int *is_serial) {
 

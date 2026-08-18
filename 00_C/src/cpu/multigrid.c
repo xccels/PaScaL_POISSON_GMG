@@ -10,6 +10,7 @@
 // #include "matrix.h" 
 // #include "multigrid_common.h" 
 #include "poisson_matrix_operator.h" 
+#include "timer.h" 
 // #include "rbgs_poisson_matrix.h"     
 
 static int lv_gdm_coarsest_max;
@@ -28,7 +29,8 @@ static int aggregation_type;
 static subdomain *mg_sdm = NULL;         
 static matrix_poisson *mg_a_poisson = NULL;
 
-#define IDX(i,j,k, nx,ny,nz) ((i)*(ny+2)*(nz+2) + (j)*(nz+2) + (k))
+// #define IDX(i,j,k, nx,ny,nz) ((i)*(ny+2)*(nz+2) + (j)*(nz+2) + (k))
+#define IDX(i,j,k, ni, nj) ((i)*(ni) + (j)*(nj) + (k))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
 void multigrid_create(subdomain *sdm, int nlevel, int ncycle, int aggr_method, int aggr_level)
@@ -1161,6 +1163,7 @@ void multigrid_restriction(double *val_c, double *val_f, subdomain *dm_c, subdom
     ny_f = dm_f->ny;
     nz_f = dm_f->nz;
 
+    timer_stamp0(STAMP_COMP);
     switch (aggregation_type)
     {
         case 0:
@@ -1232,7 +1235,11 @@ void multigrid_restriction(double *val_c, double *val_f, subdomain *dm_c, subdom
         k_offset_f = 1;
     }
 
-    
+    int ni_c = (dm_c->ny+2) * (dm_c->nz+2);
+    int nj_c = (dm_c->nz+2);
+    int ni_f = (ny_f+2) * (nz_f+2);
+    int nj_f = (nz_f+2);
+
     for (i = 1; i <= nx_c; i++) 
     {
         i_c = i + i_gl_c;
@@ -1271,18 +1278,19 @@ void multigrid_restriction(double *val_c, double *val_f, subdomain *dm_c, subdom
                     }
                         
                 }
-
-                val_c[IDX(i_c,j_c,k_c,dm_c->nx,dm_c->ny,dm_c->nz)] = ( vol_f[0][0][0] * val_f[IDX(ip_f,jp_f,kp_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[1][0][0] * val_f[IDX(iz_f,jp_f,kp_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[0][1][0] * val_f[IDX(ip_f,jz_f,kp_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[1][1][0] * val_f[IDX(iz_f,jz_f,kp_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[0][0][1] * val_f[IDX(ip_f,jp_f,kz_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[1][0][1] * val_f[IDX(iz_f,jp_f,kz_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[0][1][1] * val_f[IDX(ip_f,jz_f,kz_f,nx_f,ny_f,nz_f)] 
-                                                         + vol_f[1][1][1] * val_f[IDX(iz_f,jz_f,kz_f,nx_f,ny_f,nz_f)] ) / vol_c;
+                
+                val_c[IDX(i_c,j_c,k_c,ni_c,nj_c)] = ( vol_f[0][0][0] * val_f[IDX(ip_f,jp_f,kp_f,ni_f,nj_f)] 
+                                                    + vol_f[1][0][0] * val_f[IDX(iz_f,jp_f,kp_f,ni_f,nj_f)] 
+                                                    + vol_f[0][1][0] * val_f[IDX(ip_f,jz_f,kp_f,ni_f,nj_f)] 
+                                                    + vol_f[1][1][0] * val_f[IDX(iz_f,jz_f,kp_f,ni_f,nj_f)] 
+                                                    + vol_f[0][0][1] * val_f[IDX(ip_f,jp_f,kz_f,ni_f,nj_f)] 
+                                                    + vol_f[1][0][1] * val_f[IDX(iz_f,jp_f,kz_f,ni_f,nj_f)] 
+                                                    + vol_f[0][1][1] * val_f[IDX(ip_f,jz_f,kz_f,ni_f,nj_f)] 
+                                                    + vol_f[1][1][1] * val_f[IDX(iz_f,jz_f,kz_f,ni_f,nj_f)] ) / vol_c;
             }
         }
     }
+    timer_stamp(10,STAMP_COMP);
     free(dxf); free(dyf); free(dzf);
     dxf = dyf = dzf = NULL;
 
@@ -1401,6 +1409,10 @@ void multigrid_prolongation_linear_on_nonuniform_grid(double *val_f, const doubl
         }
     }
     
+    int ni_c = (dm_c->ny+2) * (dm_c->nz+2);
+    int nj_c = (dm_c->nz+2);
+    int ni_f = (ny_f+2) * (nz_f+2);
+    int nj_f = (nz_f+2);
     
     for (i=1;i<=nx_c;i++)
     {
@@ -1428,80 +1440,80 @@ void multigrid_prolongation_linear_on_nonuniform_grid(double *val_f, const doubl
 
                 
 
-                val_f[IDX(iz_f,jz_f,kz_f,nx_f,ny_f,nz_f)] = (dxp[iz_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(im_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(im_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(im_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jm_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(im_c,jm_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
-                                                        / ( (dxp[iz_f]+dxp[ip_f])*(dyp[jz_f]+dyp[jp_f])*(dzp[kz_f]+dzp[kp_f]) );
+                val_f[IDX(iz_f,jz_f,kz_f,ni_f,nj_f)] = (dxp[iz_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                       +dxp[ip_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(im_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                       +dxp[iz_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                       +dxp[iz_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,ni_c,nj_c)] 
+                                                       +dxp[ip_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(im_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                       +dxp[ip_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(im_c,jz_c,km_c,ni_c,nj_c)] 
+                                                       +dxp[iz_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jm_c,km_c,ni_c,nj_c)] 
+                                                       +dxp[ip_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(im_c,jm_c,km_c,ni_c,nj_c)] )
+                                                       / ( (dxp[iz_f]+dxp[ip_f])*(dyp[jz_f]+dyp[jp_f])*(dzp[kz_f]+dzp[kp_f]) );
                
-                val_f[IDX(ip_f,jz_f,kz_f,nx_f,ny_f,nz_f)] = (dxn[ip_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(ip_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(ip_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(ip_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jm_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(ip_c,jm_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(ip_f,jz_f,kz_f,ni_f,nj_f)] = (dxn[ip_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jz_f]*dzp[kz_f]*val_c[IDX(ip_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jp_f]*dzp[kz_f]*val_c[IDX(ip_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jz_f]*dzp[kp_f]*val_c[IDX(ip_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jm_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jp_f]*dzp[kp_f]*val_c[IDX(ip_c,jm_c,km_c,ni_c,nj_c)] )
                                                         / ( (dxn[iz_f]+dxn[ip_f])*(dyp[jz_f]+dyp[jp_f])*(dzp[kz_f]+dzp[kp_f]) );
               
-                val_f[IDX(iz_f,jp_f,kz_f,nx_f,ny_f,nz_f)] = (dxp[iz_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(im_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(im_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(im_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jp_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(im_c,jp_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(iz_f,jp_f,kz_f,ni_f,nj_f)] = (dxp[iz_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(im_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(im_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(im_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jp_c,km_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(im_c,jp_c,km_c,ni_c,nj_c)] )
                                                         / ( (dxp[iz_f]+dxp[ip_f])*(dyn[jz_f]+dyn[jp_f])*(dzp[kz_f]+dzp[kp_f]) );
              
-                val_f[IDX(ip_f,jp_f,kz_f,nx_f,ny_f,nz_f)] = (dxn[ip_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(ip_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(ip_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(ip_c,jz_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jp_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(ip_c,jp_c,km_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(ip_f,jp_f,kz_f,ni_f,nj_f)] = (dxn[ip_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jp_f]*dzp[kz_f]*val_c[IDX(ip_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(iz_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(iz_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jz_f]*dzp[kz_f]*val_c[IDX(ip_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jp_f]*dzp[kp_f]*val_c[IDX(ip_c,jz_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(iz_c,jp_c,km_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jz_f]*dzp[kp_f]*val_c[IDX(ip_c,jp_c,km_c,ni_c,nj_c)] )
                                                         / ( (dxn[iz_f]+dxn[ip_f])*(dyn[jz_f]+dyn[jp_f])*(dzp[kz_f]+dzp[kp_f]) );
-                val_f[IDX(iz_f,jz_f,kp_f,nx_f,ny_f,nz_f)] = (dxp[iz_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(im_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(im_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(im_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jm_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(im_c,jm_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(iz_f,jz_f,kp_f,ni_f,nj_f)] = (dxp[iz_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(im_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(im_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(im_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jm_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(im_c,jm_c,kp_c,ni_c,nj_c)] )
                                                         / ( (dxp[iz_f]+dxp[ip_f])*(dyp[jz_f]+dyp[jp_f])*(dzn[kz_f]+dzn[kp_f]) );
-                val_f[IDX(ip_f,jz_f,kp_f,nx_f,ny_f,nz_f)] = (dxn[ip_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(ip_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(ip_c,jm_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(ip_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jm_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(ip_c,jm_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(ip_f,jz_f,kp_f,ni_f,nj_f)] = (dxn[ip_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jz_f]*dzn[kp_f]*val_c[IDX(ip_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jp_f]*dzn[kp_f]*val_c[IDX(ip_c,jm_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jz_f]*dzn[kz_f]*val_c[IDX(ip_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jm_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyp[jp_f]*dzn[kz_f]*val_c[IDX(ip_c,jm_c,kp_c,ni_c,nj_c)] )
                                                         / ( (dxn[iz_f]+dxn[ip_f])*(dyp[jz_f]+dyp[jp_f])*(dzn[kz_f]+dzn[kp_f]) );
-                val_f[IDX(iz_f,jp_f,kp_f,nx_f,ny_f,nz_f)] = (dxp[iz_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(im_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(im_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(im_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[iz_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jp_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxp[ip_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(im_c,jp_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(iz_f,jp_f,kp_f,ni_f,nj_f)] = (dxp[iz_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(im_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(im_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(im_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[iz_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jp_c,kp_c,ni_c,nj_c)] 
+                                                            +dxp[ip_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(im_c,jp_c,kp_c,ni_c,nj_c)] )
                                                         / ( (dxp[iz_f]+dxp[ip_f])*(dyn[jz_f]+dyn[jp_f])*(dzn[kz_f]+dzn[kp_f]) );
-                val_f[IDX(ip_f,jp_f,kp_f,nx_f,ny_f,nz_f)] = (dxn[ip_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(ip_c,jz_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(ip_c,jp_c,kz_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(ip_c,jz_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[ip_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jp_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] 
-                                                            +dxn[iz_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(ip_c,jp_c,kp_c,dm_c->nx,dm_c->ny,dm_c->nz)] )
+                val_f[IDX(ip_f,jp_f,kp_f,ni_f,nj_f)] = (dxn[ip_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(iz_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jp_f]*dzn[kp_f]*val_c[IDX(ip_c,jz_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(iz_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(iz_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jz_f]*dzn[kp_f]*val_c[IDX(ip_c,jp_c,kz_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jp_f]*dzn[kz_f]*val_c[IDX(ip_c,jz_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[ip_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(iz_c,jp_c,kp_c,ni_c,nj_c)] 
+                                                            +dxn[iz_f]*dyn[jz_f]*dzn[kz_f]*val_c[IDX(ip_c,jp_c,kp_c,ni_c,nj_c)] )
                                                         / ( (dxn[iz_f]+dxn[ip_f])*(dyn[jz_f]+dyn[jp_f])*(dzn[kz_f]+dzn[kp_f]) );
 
             
@@ -1526,30 +1538,39 @@ void multigrid_prolongation_linear_on_nonuniform_grid(double *val_f, const doubl
 
 void multigrid_residual(double *rsd, matrix_poisson *a_poisson, double *x, double *rhs, subdomain *dm, int is_aggregated[3])
 {
-    int i,j,k;
+    int i,j,k, idx;
     int nx = dm->nx;
     int ny = dm->ny;
     int nz = dm->nz;
 
+    int ni = (ny+2)*(nz+2);
+    int nj = (nz+2);
+
+    timer_stamp0(STAMP_COMP);
     #pragma omp parallel for collapse(3)
     for(i=0;i<=nx+1;i++){
         for(j=0;j<=ny+1;j++){
             for(k=0;k<=nz+1;k++){
-                rsd[IDX(i,j,k,nx,ny,nz)] = 0.0;
+                rsd[IDX(i,j,k,ni,nj)] = 0.0;
             }
         }
     }
+    timer_stamp(10,STAMP_COMP);
 
     mv_mul_poisson_matrix(rsd, a_poisson, x, dm, is_aggregated);
 
+    timer_stamp0(STAMP_COMP);
     #pragma omp parallel for collapse(3)
     for(i=1;i<=nx;i++){
         for(j=1;j<=ny;j++){
             for(k=1;k<=nz;k++){
-                rsd[IDX(i,j,k,nx,ny,nz)] = rhs[IDX(i,j,k,nx,ny,nz)] - rsd[IDX(i,j,k,nx,ny,nz)];
+                idx = IDX(i,j,k,ni,nj);
+                rsd[idx] = rhs[idx] - rsd[idx];
             }
         }
     }
+    timer_stamp(10,STAMP_COMP);
+
 }
 
 void multigrid_solve_coarset_level(double *x, matrix_poisson *a_poisson, double *rhs, subdomain *dm, int maxiteration, double tolerance, double omega, int is_aggregated[3])
@@ -1558,6 +1579,9 @@ void multigrid_solve_coarset_level(double *x, matrix_poisson *a_poisson, double 
     int nx = dm->nx;
     int ny = dm->ny;
     int nz = dm->nz;
+
+    int ni = (ny+2)*(nz+2);
+    int nj = (nz+2);
 
     int myrank;
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
@@ -1571,14 +1595,16 @@ void multigrid_solve_coarset_level(double *x, matrix_poisson *a_poisson, double 
   
 
     if ((nx*ny*nz == 1) && (is_aggregated[0] && is_aggregated[1] && is_aggregated[2])) {
+        timer_stamp0(STAMP_COMP);
         for (i=1; i<=nx; i++) {
             for (j=1; j<=ny; j++) {
                 for (k=1; k<=nz; k++) {
-                    size_t idx = IDX(i,j,k,nx,ny,nz);
+                    size_t idx = IDX(i,j,k,ni,nj);
                     x[idx] = rhs[idx] / *COEFF(a_poisson, 0, i, j, k);
                 }
             }
         }
+        timer_stamp(10,STAMP_COMP);
     } else {
         rbgs_solver_poisson_matrix(x, a_poisson, rhs, dm, maxiteration, tolerance, omega, is_aggregated);
     }
@@ -1613,42 +1639,74 @@ void multigrid_solve_vcycle(double *sol, matrix_poisson *a_poisson, double *rhs,
 
 void multigrid_no_aggregation_vcycle_solver(double *sol, matrix_poisson *a_poisson, double *rhs, subdomain *sdm, int maxiteration, double tolerance, double omega_sor)
 {
-    int l, cyc, nx, ny, nz;
+    int l, cyc, nx, ny, nz, ni, nj;
     double rsd_val, res0tol;
 
     nx = sdm->nx;
     ny = sdm->ny;
     nz = sdm->nz;
+    
     size_t size = (nx+2)*(ny+2)*(nz+2);
     double *rsd = (double*) calloc(size, sizeof(double));
 
+    timer_stamp0(STAMP_COMP);
+    timer_stamp0(STAMP_COMM_NEIGHBOR);
+    timer_stamp0(STAMP_COMM_ALLREDUCE);
+    timer_stamp0(STAMP_residual);
     multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+    timer_stamp(18,STAMP_residual);
     vv_dot_3d_matrix(&res0tol, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
     for(cyc = 1; cyc <= n_vcycles; cyc++)
     {
+        timer_stamp0(STAMP_LEVEL);
+        timer_stamp0(STAMP_smooth);
         rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp0(STAMP_residual);
         multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+        timer_stamp(18,STAMP_residual);
+        timer_stamp(5,STAMP_LEVEL);
+        
+        timer_stamp0(STAMP_restriction);
         multigrid_restriction(mg_sdm[1].b, rsd, &mg_sdm[1], sdm, 0);
+        timer_stamp(16,STAMP_restriction);
         if(myrank==0) printf("[MG] Restriction from level 0 to level 1\n");
 
         for(l=1; l<=n_levels-1; l++)
         {
             size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
             memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+            timer_stamp0(STAMP_LEVEL);
+            timer_stamp0(STAMP_smooth);
             rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+            timer_stamp(15,STAMP_smooth);
+            timer_stamp0(STAMP_residual);
             multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+            timer_stamp(18,STAMP_residual);
+            timer_stamp(6,STAMP_LEVEL);
+             
+            timer_stamp0(STAMP_restriction);
             multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+            timer_stamp(16,STAMP_restriction);
             if(myrank==0) printf("[MG] Restriction from level %d to level %d\n", l, l+1);
         }
 
+        timer_stamp0(STAMP_LEVEL);
+        timer_stamp0(STAMP_smooth);
         multigrid_solve_coarset_level(mg_sdm[n_levels].x, &mg_a_poisson[n_levels], mg_sdm[n_levels].b, &mg_sdm[n_levels], 1000, tolerance, omega_sor, mg_sdm[n_levels].is_aggregated);
-
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp0(STAMP_residual);
         multigrid_residual(mg_sdm[n_levels].r, &mg_a_poisson[n_levels], mg_sdm[n_levels].x, mg_sdm[n_levels].b, &mg_sdm[n_levels], mg_sdm[n_levels].is_aggregated);
+        timer_stamp(18,STAMP_residual);
+        timer_stamp(7,STAMP_LEVEL);
+        
         if (myrank == 0) {
+            ni = (mg_sdm[n_levels].ny+2) * (mg_sdm[n_levels].nz+2);
+            nj = (mg_sdm[n_levels].nz+2);
             printf("[MG] Solution in the coarsest level : x(1,1,1) = %18.10e, residue = %18.10e\n",
-            mg_sdm[n_levels].x[IDX(1,1,1, mg_sdm[n_levels].nx, mg_sdm[n_levels].ny, mg_sdm[n_levels].nz)],
-            mg_sdm[n_levels].r[IDX(1,1,1, mg_sdm[n_levels].nx, mg_sdm[n_levels].ny, mg_sdm[n_levels].nz)]);
+            mg_sdm[n_levels].x[IDX(1,1,1, ni,nj)],
+            mg_sdm[n_levels].r[IDX(1,1,1, ni,nj)]);
         }
     #ifdef DEBUG_COARSEST
         multigrid_common_print_coarsest_level_solution(cyc, &mg_sdm[n_levels]);
@@ -1656,20 +1714,42 @@ void multigrid_no_aggregation_vcycle_solver(double *sol, matrix_poisson *a_poiss
 
         for(l = n_levels-1; l >= 1; l--)
         {
+            timer_stamp0(STAMP_COMM_NEIGHBOR);
             geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
-            multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
+            timer_stamp(11,STAMP_COMM_NEIGHBOR);
             
+            timer_stamp0(STAMP_COMP);
+            timer_stamp0(STAMP_prolongation);
+            multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
+            timer_stamp(17,STAMP_prolongation);
+            timer_stamp0(STAMP_LEVEL);
             size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
             for(size_t idx=0; idx<level_size; idx++) mg_sdm[l].x[idx] = mg_sdm[l].x[idx] + mg_sdm[l].r[idx];
-
+            timer_stamp(10,STAMP_COMP);
+            timer_stamp0(STAMP_smooth);
             rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+            timer_stamp(15,STAMP_smooth);
+            timer_stamp(6,STAMP_LEVEL);
         }
 
+        timer_stamp0(STAMP_COMM_NEIGHBOR);
         geometry_halocell_update_selectively(mg_sdm[1].x, &mg_sdm[1], mg_sdm[1].is_aggregated);
+        timer_stamp(11,STAMP_COMM_NEIGHBOR);
+        
+        timer_stamp0(STAMP_COMP);
+        timer_stamp0(STAMP_prolongation);
         multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm[1].x, sdm, &mg_sdm[1], 0);
+        timer_stamp(17,STAMP_prolongation);
+        timer_stamp0(STAMP_LEVEL);
         for(size_t idx=0; idx<size; idx++) sol[idx] = sol[idx] + rsd[idx];
+        timer_stamp(10,STAMP_COMP);
+        timer_stamp0(STAMP_smooth);
         rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp(5,STAMP_LEVEL);
+        timer_stamp0(STAMP_residual);
         multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+        timer_stamp(18,STAMP_residual);
         vv_dot_3d_matrix(&rsd_val, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
         if(myrank==0)
@@ -1687,7 +1767,7 @@ void multigrid_no_aggregation_vcycle_solver(double *sol, matrix_poisson *a_poiss
 
 void multigrid_single_aggregation_vcycle_solver(double *sol, matrix_poisson *a_poisson, double *rhs, subdomain *sdm, int maxiteration, double tolerance, double omega_sor)
 {
-    int l, i, cyc;
+    int l, i, cyc, ni, nj;
     double rsd_val, res0tol;
 
     MPI_Datatype  ddtype_temp1, ddtype_send, ddtype_gatherv;
@@ -1702,6 +1782,8 @@ void multigrid_single_aggregation_vcycle_solver(double *sol, matrix_poisson *a_p
     int (*cart_coord)[3];
     cart_coord = malloc(nprocs * sizeof(*cart_coord));
     int ierr;
+
+    timer_stamp0(STAMP_AGG);
     for (i = 0; i < nprocs; i++) {
         ierr = MPI_Cart_coords(mpi_world_cart, i, 3, cart_coord[i]);
         if (ierr != MPI_SUCCESS) {
@@ -1809,6 +1891,8 @@ void multigrid_single_aggregation_vcycle_solver(double *sol, matrix_poisson *a_p
                           + ny * (cart_coord[i][1]) * (nz_aggr + 2)       
                           + nx * (cart_coord[i][0]) * (nz_aggr + 2) * (ny_aggr + 2);                            // x offset
     }
+    timer_stamp(8,STAMP_AGG);
+
 
     nx = sdm->nx;
     ny = sdm->ny;
@@ -1816,33 +1900,60 @@ void multigrid_single_aggregation_vcycle_solver(double *sol, matrix_poisson *a_p
     size_t size = (nx+2)*(ny+2)*(nz+2);
     double *rsd = (double*) calloc(size, sizeof(double));
 
+    timer_stamp0(STAMP_residual);
     multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+    timer_stamp(18,STAMP_residual);
     vv_dot_3d_matrix(&res0tol, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
     for(cyc = 1; cyc <= n_vcycles; cyc++)
     {
+        timer_stamp0(STAMP_LEVEL);
+        timer_stamp0(STAMP_smooth);
         rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp0(STAMP_residual);
         multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+        timer_stamp(18,STAMP_residual);
+        timer_stamp(5,STAMP_LEVEL);
+
+        timer_stamp0(STAMP_restriction);
         multigrid_restriction(mg_sdm[1].b, rsd, &mg_sdm[1], sdm, 0);
+        timer_stamp(16,STAMP_restriction);
         if(myrank==0) printf("[MG] Restriction from level 0 to level 1\n");
 
         for(l=1; l<=lv_aggregation-1; l++)
         {
             size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
             memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+
+            timer_stamp0(STAMP_LEVEL);
+            timer_stamp0(STAMP_smooth);
             rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+            timer_stamp(15,STAMP_smooth);
+            timer_stamp0(STAMP_residual);
             multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+            timer_stamp(18,STAMP_residual);
+            timer_stamp(6,STAMP_LEVEL);
+            timer_stamp0(STAMP_restriction);
             multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+            timer_stamp(16,STAMP_restriction);
             if(myrank==0) printf("[MG] Restriction from level %d to level %d\n", l, l+1);
         }
     
 l = lv_aggregation;
 
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, ddtype_send, mg_sdm[lv_aggregation].b, cnt_gatherv, disps_gatherv, ddtype_gatherv, 0, MPI_COMM_WORLD);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[lv_aggregation].b, 1, ddtype_send, mg_sdm[lv_aggregation].b, cnt_gatherv, disps_gatherv, ddtype_gatherv, 0, MPI_COMM_WORLD);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
+
 
     if (myrank == 0) {
     // Restriction phase
@@ -1851,18 +1962,35 @@ if (myrank == 0) {
     for (int l = lv_aggregation; l < n_levels; l++) {
         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+
+        timer_stamp0(STAMP_LEVEL);
+        timer_stamp0(STAMP_smooth);
         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp0(STAMP_residual);
         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+        timer_stamp(18,STAMP_residual);
+        timer_stamp(6,STAMP_LEVEL);
+        
+        timer_stamp0(STAMP_restriction);
         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+        timer_stamp(16,STAMP_restriction);
         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
     }
 
     // Solve at coarsest level
+    timer_stamp0(STAMP_LEVEL);
+    timer_stamp0(STAMP_smooth);
     multigrid_solve_coarset_level(mg_sdm[n_levels].x, &mg_a_poisson[n_levels], mg_sdm[n_levels].b, &mg_sdm[n_levels], 1000, tolerance, omega_sor, mg_sdm[n_levels].is_aggregated);
-
+    timer_stamp(15,STAMP_smooth);
+    timer_stamp0(STAMP_residual);
     multigrid_residual(mg_sdm[n_levels].r, &mg_a_poisson[n_levels], mg_sdm[n_levels].x, mg_sdm[n_levels].b, &mg_sdm[n_levels], mg_sdm[n_levels].is_aggregated);
+    timer_stamp(18,STAMP_residual);
+    timer_stamp(7,STAMP_LEVEL);
 
-    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)], mg_sdm[n_levels].r[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)]);
+    ni = (mg_sdm[n_levels].ny+2) * (mg_sdm[n_levels].nz+2);
+    nj = (mg_sdm[n_levels].nz+2);
+    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,ni,nj)], mg_sdm[n_levels].r[IDX(1,1,1,ni,nj)]);
 
 #ifdef DEBUG_COARSEST
     multigrid_common_print_coarsest_level_solution(cyc, &mg_sdm[n_levels]);
@@ -1870,8 +1998,11 @@ if (myrank == 0) {
 
     // Prolongation phase
     for (l = n_levels-1; l >= lv_aggregation; l--) {
+        timer_stamp0(STAMP_COMP);
+        timer_stamp0(STAMP_prolongation);
         multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
-
+        timer_stamp(17,STAMP_prolongation);
+        timer_stamp0(STAMP_LEVEL);
         // x = x + r
         nx = mg_sdm[l].nx;
         ny = mg_sdm[l].ny;
@@ -1879,26 +2010,40 @@ if (myrank == 0) {
         for (i = 0; i < (nx+2)*(ny+2)*(nz+2); i++) {
             mg_sdm[l].x[i] += mg_sdm[l].r[i];
         }
+        timer_stamp(10,STAMP_COMP);
 
+        timer_stamp0(STAMP_smooth);
         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+        timer_stamp(15,STAMP_smooth);
+        timer_stamp(6,STAMP_LEVEL);
     }
 }
 
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[lv_aggregation].x, cnt_scatterv, disps_scatterv, ddtype_scatterv, MPI_IN_PLACE, 0, ddtype_recv, 0, MPI_COMM_WORLD);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[lv_aggregation].x, cnt_scatterv, disps_scatterv, ddtype_scatterv, mg_sdm[lv_aggregation].x, 1, ddtype_recv, 0, MPI_COMM_WORLD);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
+timer_stamp(8,STAMP_AGG);
 
 
 // Loop for prolongation from aggregation level down to level 1
 for (int l = lv_aggregation-1; l >= 1; l--) {
+    timer_stamp0(STAMP_COMM_NEIGHBOR);
     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+    timer_stamp0(STAMP_COMP);
+    timer_stamp0(STAMP_prolongation);
     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-
+    timer_stamp(17,STAMP_prolongation);
+    timer_stamp0(STAMP_LEVEL);
     nx = mg_sdm[l].nx;
     ny = mg_sdm[l].ny;
     nz = mg_sdm[l].nz;
@@ -1906,16 +2051,25 @@ for (int l = lv_aggregation-1; l >= 1; l--) {
     for (i = 0; i < size; i++) {
         mg_sdm[l].x[i] += mg_sdm[l].r[i];
     }
+    timer_stamp(10,STAMP_COMP);
 
+    timer_stamp0(STAMP_smooth);
     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+    timer_stamp(15,STAMP_smooth);
+    timer_stamp(6,STAMP_LEVEL);
 }
 
 // Prolongation to actual solution
+timer_stamp0(STAMP_COMM_NEIGHBOR);
 geometry_halocell_update_selectively(mg_sdm[1].x, &mg_sdm[1], mg_sdm[1].is_aggregated);
+timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+timer_stamp0(STAMP_COMP);
+timer_stamp0(STAMP_prolongation);
 multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm[1].x, sdm, &mg_sdm[1], 0);
-
+timer_stamp(17,STAMP_prolongation);
+timer_stamp0(STAMP_LEVEL);
 nx = sdm->nx;
 ny = sdm->ny;
 nz = sdm->nz;
@@ -1923,11 +2077,14 @@ int size = (nx+2)*(ny+2)*(nz+2);
 for (i = 0; i < size; i++) {
     sol[i] += rsd[i];
 }
-
+timer_stamp(10,STAMP_COMP);
+timer_stamp0(STAMP_smooth);
 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
-
+timer_stamp(15,STAMP_smooth);
+timer_stamp(5,STAMP_LEVEL);
+timer_stamp0(STAMP_residual);
 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
-
+timer_stamp(18,STAMP_residual);
 vv_dot_3d_matrix(&rsd_val, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
 if (myrank == 0) {
@@ -1947,7 +2104,7 @@ if (sqrt(rsd_val/res0tol) < tolerance) break;
 
 void multigrid_adaptive_aggregation_vcycle_solver(double *sol, matrix_poisson *a_poisson, double *rhs, subdomain *sdm, int maxiteration, double tolerance, double omega_sor)
 {
-    int l, i, cyc;
+    int l, i, cyc,ni,nj;
     double rsd_val, res0tol;
 
     MPI_Datatype  ddtype_temp1;
@@ -1988,6 +2145,8 @@ void multigrid_adaptive_aggregation_vcycle_solver(double *sol, matrix_poisson *a
     int (*cart_coord)[3];
     cart_coord = malloc(nprocs * sizeof(*cart_coord));
     int ierr;
+
+    
     for (i = 0; i < nprocs; i++) {
         ierr = MPI_Cart_coords(mpi_world_cart, i, 3, cart_coord[i]);
         if (ierr != MPI_SUCCESS) {
@@ -2003,7 +2162,7 @@ void multigrid_adaptive_aggregation_vcycle_solver(double *sol, matrix_poisson *a
     disps_gatherv_z = malloc((comm_1d_z.nprocs ) * sizeof(int));
 
 
-
+    timer_stamp0(STAMP_AGG);
     if (lv_aggregation_x != 0)
     {
         nx_aggr = mg_sdm[lv_aggregation_x].nx;
@@ -2144,6 +2303,7 @@ void multigrid_adaptive_aggregation_vcycle_solver(double *sol, matrix_poisson *a
             disps_gatherv_z[i] = nz * i;    
         }
     }
+    timer_stamp(8,STAMP_AGG);
 
     if (lv_aggregation_x == 0)
     {
@@ -2469,51 +2629,88 @@ void multigrid_adaptive_aggregation_vcycle_solver(double *sol, matrix_poisson *a
         case 1:
             // 1 aggregation level
 
+            timer_stamp0(STAMP_residual);
             multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+            timer_stamp(18,STAMP_residual);
             vv_dot_3d_matrix(&res0tol, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
             for(cyc = 1; cyc <= n_vcycles; cyc++)
             {
+                timer_stamp0(STAMP_LEVEL);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
+                timer_stamp(5,STAMP_LEVEL);
+                timer_stamp0(STAMP_restriction);
                 multigrid_restriction(mg_sdm[1].b, rsd, &mg_sdm[1], sdm, 0);
+                timer_stamp(16,STAMP_restriction);
                 if(myrank==0) printf("[MG] Restriction from level 0 to level 1\n");
 
                 for(l=1; l<=*lv_aggr_max_ptr-1; l++)
                 {
                     size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                     memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(6,STAMP_LEVEL);
+                    timer_stamp0(STAMP_restriction);
                     multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                    timer_stamp(16,STAMP_restriction);
                     if(myrank==0) printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                 }
     
 l = *lv_aggr_max_ptr;
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 if ((*comm_max_ptr).myrank == 0) {
                     // Restriction phase
                     for (int l = *lv_aggr_max_ptr; l < n_levels; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
 
                     // Solve at coarsest level
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     multigrid_solve_coarset_level(mg_sdm[n_levels].x, &mg_a_poisson[n_levels], mg_sdm[n_levels].b, &mg_sdm[n_levels], 1000, tolerance, omega_sor, mg_sdm[n_levels].is_aggregated);
-
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[n_levels].r, &mg_a_poisson[n_levels], mg_sdm[n_levels].x, mg_sdm[n_levels].b, &mg_sdm[n_levels], mg_sdm[n_levels].is_aggregated);
-
-                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)], mg_sdm[n_levels].r[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)]);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(7,STAMP_LEVEL);
+                    ni = (mg_sdm[n_levels].ny+2) * (mg_sdm[n_levels].nz+2);
+                    nj = (mg_sdm[n_levels].nz+2);
+                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,ni,nj)], mg_sdm[n_levels].r[IDX(1,1,1,ni,nj)]);
 
 #ifdef DEBUG_COARSEST
     multigrid_common_print_coarsest_level_solution(cyc, &mg_sdm[n_levels]);
@@ -2521,8 +2718,11 @@ if (myrank == 0) {
 
                     // Prolongation phase
                     for (l = n_levels-1; l >= *lv_aggr_max_ptr; l--) {
+                        timer_stamp0(STAMP_COMP);
+                        timer_stamp0(STAMP_prolongation);
                         multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
-
+                        timer_stamp(17,STAMP_prolongation);
+                        timer_stamp0(STAMP_LEVEL);
                         // x = x + r
                         nx = mg_sdm[l].nx;
                         ny = mg_sdm[l].ny;
@@ -2530,28 +2730,42 @@ if (myrank == 0) {
                         for (i = 0; i < (nx+2)*(ny+2)*(nz+2); i++) {
                             mg_sdm[l].x[i] += mg_sdm[l].r[i];
                         }
+                        timer_stamp(10,STAMP_COMP);
 
-                    rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp0(STAMP_smooth);
+                        rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp(6,STAMP_LEVEL);
                     }
                 }
 
 l = *lv_aggr_max_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, MPI_IN_PLACE, 0, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, mg_sdm[l].x, 1, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
+timer_stamp(8,STAMP_AGG);
 
 
                 // Loop for prolongation from aggregation level down to level 1
                 for (int l = *lv_aggr_max_ptr-1; l >= 1; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
                     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
-
+                    timer_stamp(17,STAMP_prolongation);
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2559,16 +2773,25 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
+
                 }
 
                 // Prolongation to actual solution
+                timer_stamp0(STAMP_COMM_NEIGHBOR);
                 geometry_halocell_update_selectively(mg_sdm[1].x, &mg_sdm[1], mg_sdm[1].is_aggregated);
+                timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                timer_stamp0(STAMP_COMP);
+                timer_stamp0(STAMP_prolongation);
                 multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm[1].x, sdm, &mg_sdm[1], 0);
-
+                timer_stamp(17,STAMP_prolongation);
+                timer_stamp0(STAMP_LEVEL);
                 nx = sdm->nx;
                 ny = sdm->ny;
                 nz = sdm->nz;
@@ -2576,10 +2799,15 @@ if (myrank == 0) {
                 for (i = 0; i < size; i++) {
                     sol[i] += rsd[i];
                 }
-
+                timer_stamp(10,STAMP_COMP);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp(5,STAMP_LEVEL);
 
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
 
                 vv_dot_3d_matrix(&rsd_val, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
@@ -2602,71 +2830,125 @@ if (myrank == 0) {
 
         case 2:
             // 2 aggregation level
-
+            timer_stamp0(STAMP_residual);
             multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+            timer_stamp(18,STAMP_residual);
             vv_dot_3d_matrix(&res0tol, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
             for(cyc = 1; cyc <= n_vcycles; cyc++)
             {
+                timer_stamp0(STAMP_LEVEL);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
+                timer_stamp(5,STAMP_LEVEL);
+
+                timer_stamp0(STAMP_restriction);
                 multigrid_restriction(mg_sdm[1].b, rsd, &mg_sdm[1], sdm, 0);
+                timer_stamp(16,STAMP_restriction);
                 if(myrank==0) printf("[MG] Restriction from level 0 to level 1\n");
 
                 for(l=1; l<=*lv_aggr_med_ptr-1; l++)
                 {
                     size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                     memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(6,STAMP_LEVEL);
+                    
+                    timer_stamp0(STAMP_restriction);
                     multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                    timer_stamp(16,STAMP_restriction);
                     if(myrank==0) printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                 }
     
 l = *lv_aggr_med_ptr;
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_med_ptr, mg_sdm[l].b, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_med_ptr, mg_sdm[l].b, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 if ((*comm_med_ptr).myrank == 0) {
                     // Restriction phase
                     for (int l = *lv_aggr_med_ptr; l < *lv_aggr_max_ptr; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
 
 l = *lv_aggr_max_ptr;
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 if ((*comm_max_ptr).myrank == 0) {
                     // Restriction phase
                     for (int l = *lv_aggr_max_ptr; l < n_levels; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+                        
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
 
                     // Solve at coarsest level
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     multigrid_solve_coarset_level(mg_sdm[n_levels].x, &mg_a_poisson[n_levels], mg_sdm[n_levels].b, &mg_sdm[n_levels], 1000, tolerance, omega_sor, mg_sdm[n_levels].is_aggregated);
-
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[n_levels].r, &mg_a_poisson[n_levels], mg_sdm[n_levels].x, mg_sdm[n_levels].b, &mg_sdm[n_levels], mg_sdm[n_levels].is_aggregated);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(7,STAMP_LEVEL);
 
-                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)], mg_sdm[n_levels].r[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)]);
+                    ni = (mg_sdm[n_levels].ny+2) * (mg_sdm[n_levels].nz+2);
+                    nj = (mg_sdm[n_levels].nz+2);
+                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,ni,nj)], mg_sdm[n_levels].r[IDX(1,1,1,ni,nj)]);
 
 #ifdef DEBUG_COARSEST
     multigrid_common_print_coarsest_level_solution(cyc, &mg_sdm[n_levels]);
@@ -2674,8 +2956,11 @@ if (myrank == 0) {
 
                     // Prolongation phase
                     for (l = n_levels-1; l >= *lv_aggr_max_ptr; l--) {
+                        timer_stamp0(STAMP_COMP);
+                        timer_stamp0(STAMP_prolongation);
                         multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
-
+                        timer_stamp(17,STAMP_prolongation);
+                        timer_stamp0(STAMP_LEVEL);
                         // x = x + r
                         nx = mg_sdm[l].nx;
                         ny = mg_sdm[l].ny;
@@ -2683,28 +2968,42 @@ if (myrank == 0) {
                         for (i = 0; i < (nx+2)*(ny+2)*(nz+2); i++) {
                             mg_sdm[l].x[i] += mg_sdm[l].r[i];
                         }
+                        timer_stamp(10,STAMP_COMP);
 
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                     }
                 }
 
 l = *lv_aggr_max_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, MPI_IN_PLACE, 0, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, mg_sdm[l].x, 1, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
+timer_stamp(8,STAMP_AGG);
 
 
                 // Loop for prolongation from aggregation level down to level 1
                 for (int l = *lv_aggr_max_ptr-1; l >= *lv_aggr_med_ptr; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
                     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
-
+                    timer_stamp(17,STAMP_prolongation);
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2712,30 +3011,45 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                 }
             }
 
 
 l = *lv_aggr_med_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, MPI_IN_PLACE, 0, *ddtype_send_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, mg_sdm[l].x, 1, *ddtype_send_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
+timer_stamp(8,STAMP_AGG);
 
 
                 // Loop for prolongation from aggregation level down to level 1
                 for (int l = *lv_aggr_med_ptr-1; l >= 1; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
                     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
 
+                    timer_stamp(17,STAMP_prolongation);
+                    
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2743,16 +3057,24 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                 }
 
                 // Prolongation to actual solution
+                timer_stamp0(STAMP_COMM_NEIGHBOR);
                 geometry_halocell_update_selectively(mg_sdm[1].x, &mg_sdm[1], mg_sdm[1].is_aggregated);
+                timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                timer_stamp0(STAMP_COMP);
+                timer_stamp0(STAMP_prolongation);
                 multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm[1].x, sdm, &mg_sdm[1], 0);
-
+                timer_stamp(17,STAMP_prolongation);
+                timer_stamp0(STAMP_LEVEL);
                 nx = sdm->nx;
                 ny = sdm->ny;
                 nz = sdm->nz;
@@ -2760,10 +3082,15 @@ if (myrank == 0) {
                 for (i = 0; i < size; i++) {
                     sol[i] += rsd[i];
                 }
-
+                timer_stamp(10,STAMP_COMP);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp(5,STAMP_LEVEL);
 
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
 
                 vv_dot_3d_matrix(&rsd_val, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
@@ -2787,88 +3114,156 @@ if (myrank == 0) {
         case 3:
             // 3 aggregation level
 
+            timer_stamp0(STAMP_residual);
             multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+            timer_stamp(18,STAMP_residual);
             vv_dot_3d_matrix(&res0tol, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 
             for(cyc = 1; cyc <= n_vcycles; cyc++)
             {
+                timer_stamp0(STAMP_LEVEL);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
+                timer_stamp(5,STAMP_LEVEL);
+
+                timer_stamp0(STAMP_restriction);
                 multigrid_restriction(mg_sdm[1].b, rsd, &mg_sdm[1], sdm, 0);
+                timer_stamp(16,STAMP_restriction);
                 if(myrank==0) printf("[MG] Restriction from level 0 to level 1\n");
 
                 for(l=1; l<=*lv_aggr_min_ptr-1; l++)
                 {
                     size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                     memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(6,STAMP_LEVEL);
+                    
+                    timer_stamp0(STAMP_restriction);
                     multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                    timer_stamp(16,STAMP_restriction);
                     if(myrank==0) printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                 }
 
 l = *lv_aggr_min_ptr;
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_min_ptr, mg_sdm[l].b, cnt_gatherv_min_ptr, disps_gatherv_min_ptr, *ddtype_gatherv_min_ptr, 0, comm_min_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_min_ptr, mg_sdm[l].b, cnt_gatherv_min_ptr, disps_gatherv_min_ptr, *ddtype_gatherv_min_ptr, 0, comm_min_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
+
                 if ((*comm_min_ptr).myrank == 0) {
 
                     for (int l = *lv_aggr_min_ptr; l < *lv_aggr_med_ptr; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+                        
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
     
 l = *lv_aggr_med_ptr;
-
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_med_ptr, mg_sdm[l].b, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_med_ptr, mg_sdm[l].b, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 if ((*comm_med_ptr).myrank == 0) {
                     // Restriction phase
                     for (int l = *lv_aggr_med_ptr; l < *lv_aggr_max_ptr; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
 
 l = *lv_aggr_max_ptr;
-  
+timer_stamp0(STAMP_AGG);
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(MPI_IN_PLACE, 0, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 } else {
+    timer_stamp0(STAMP_COMM_GATHER);
     MPI_Gatherv(mg_sdm[l].b, 1, *ddtype_send_max_ptr, mg_sdm[l].b, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(13,STAMP_COMM_GATHER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 if ((*comm_max_ptr).myrank == 0) {
                     // Restriction phase
                     for (int l = *lv_aggr_max_ptr; l < n_levels; l++) {
                         size_t level_size = (mg_sdm[l].nx + 2) * (mg_sdm[l].ny + 2) * (mg_sdm[l].nz + 2);
                         memset(mg_sdm[l].x, 0, level_size * sizeof(double));
+                        timer_stamp0(STAMP_LEVEL);
+                        timer_stamp0(STAMP_smooth);
                         rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp0(STAMP_residual);
                         multigrid_residual(mg_sdm[l].r, &mg_a_poisson[l], mg_sdm[l].x, mg_sdm[l].b, &mg_sdm[l], mg_sdm[l].is_aggregated);
+                        timer_stamp(18,STAMP_residual);
+                        timer_stamp(6,STAMP_LEVEL);
+                        timer_stamp0(STAMP_restriction);
                         multigrid_restriction(mg_sdm[l+1].b, mg_sdm[l].r, &mg_sdm[l+1], &mg_sdm[l], l);
+                        timer_stamp(16,STAMP_restriction);
                         printf("[MG] Restriction from level %d to level %d\n", l, l+1);
                     }
 
                     // Solve at coarsest level
+                    timer_stamp0(STAMP_LEVEL);
+                    timer_stamp0(STAMP_smooth);
                     multigrid_solve_coarset_level(mg_sdm[n_levels].x, &mg_a_poisson[n_levels], mg_sdm[n_levels].b, &mg_sdm[n_levels], 1000, tolerance, omega_sor, mg_sdm[n_levels].is_aggregated);
-
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp0(STAMP_residual);
                     multigrid_residual(mg_sdm[n_levels].r, &mg_a_poisson[n_levels], mg_sdm[n_levels].x, mg_sdm[n_levels].b, &mg_sdm[n_levels], mg_sdm[n_levels].is_aggregated);
-
-                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)], mg_sdm[n_levels].r[IDX(1,1,1,mg_sdm[n_levels].nx,mg_sdm[n_levels].ny,mg_sdm[n_levels].nz)]);
+                    timer_stamp(18,STAMP_residual);
+                    timer_stamp(7,STAMP_LEVEL);
+                    ni = (mg_sdm[n_levels].ny+2) * (mg_sdm[n_levels].nz+2);
+                    nj = (mg_sdm[n_levels].nz+2);
+                    printf("[MG] Solution in the coarsest level : x(1,1,1) = %.10e, residue = %.10e\n", mg_sdm[n_levels].x[IDX(1,1,1,ni,nj)], mg_sdm[n_levels].r[IDX(1,1,1,ni,nj)]);
 
 #ifdef DEBUG_COARSEST
     multigrid_common_print_coarsest_level_solution(cyc, &mg_sdm[n_levels]);
@@ -2876,8 +3271,11 @@ if (myrank == 0) {
 
                     // Prolongation phase
                     for (l = n_levels-1; l >= *lv_aggr_max_ptr; l--) {
+                        timer_stamp0(STAMP_COMP);
+                        timer_stamp0(STAMP_prolongation);
                         multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x, &mg_sdm[l], &mg_sdm[l+1], l);
-
+                        timer_stamp(17,STAMP_prolongation);
+                        timer_stamp0(STAMP_LEVEL);
                         // x = x + r
                         nx = mg_sdm[l].nx;
                         ny = mg_sdm[l].ny;
@@ -2885,28 +3283,41 @@ if (myrank == 0) {
                         for (i = 0; i < (nx+2)*(ny+2)*(nz+2); i++) {
                             mg_sdm[l].x[i] += mg_sdm[l].r[i];
                         }
-
-                    rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(10,STAMP_COMP);
+                        timer_stamp0(STAMP_smooth);
+                        rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b, &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                        timer_stamp(15,STAMP_smooth);
+                        timer_stamp(6,STAMP_LEVEL);
                     }
                 }
 
 l = *lv_aggr_max_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, MPI_IN_PLACE, 0, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_max_ptr, disps_gatherv_max_ptr, *ddtype_gatherv_max_ptr, mg_sdm[l].x, 1, *ddtype_send_max_ptr, 0, comm_max_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
-
+timer_stamp(8,STAMP_AGG);
 
                 // Loop for prolongation from aggregation level down to level 1
                 for (int l = *lv_aggr_max_ptr-1; l >= *lv_aggr_med_ptr; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
                     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
+                    timer_stamp(17,STAMP_prolongation);
 
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2914,27 +3325,41 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                 }
             }
 
 
 l = *lv_aggr_med_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, MPI_IN_PLACE, 0, *ddtype_send_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_med_ptr, disps_gatherv_med_ptr, *ddtype_gatherv_med_ptr, mg_sdm[l].x, 1, *ddtype_send_med_ptr, 0, comm_med_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
-                for (int l = *lv_aggr_med_ptr-1; l >= *lv_aggr_min_ptr; l--) {
-                    geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+timer_stamp(8,STAMP_AGG);
 
+                for (int l = *lv_aggr_med_ptr-1; l >= *lv_aggr_min_ptr; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
+                    geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
+
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
-
+                    timer_stamp(17,STAMP_prolongation);
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2942,28 +3367,42 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                 }
             }
 
 l = *lv_aggr_min_ptr;
+timer_stamp0(STAMP_AGG);
 // #ifdef MPI_IN_PLACE
 if (myrank == 0) {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_min_ptr, disps_gatherv_min_ptr, *ddtype_gatherv_min_ptr, MPI_IN_PLACE, 0, *ddtype_send_min_ptr, 0, comm_min_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 } else {
+    timer_stamp0(STAMP_COMM_SCATTER);
     MPI_Scatterv(mg_sdm[l].x, cnt_gatherv_min_ptr, disps_gatherv_min_ptr, *ddtype_gatherv_min_ptr, mg_sdm[l].x, 1, *ddtype_send_min_ptr, 0, comm_min_ptr->mpi_comm);
+    timer_stamp(14,STAMP_COMM_SCATTER);
 }
+timer_stamp(8,STAMP_AGG);
 
                 // Loop for prolongation from aggregation level down to level 1
                 for (int l = *lv_aggr_min_ptr-1; l >= 1; l--) {
+                    timer_stamp0(STAMP_COMM_NEIGHBOR);
                     geometry_halocell_update_selectively(mg_sdm[l+1].x, &mg_sdm[l+1], mg_sdm[l+1].is_aggregated);
+                    timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                    timer_stamp0(STAMP_COMP);
+                    timer_stamp0(STAMP_prolongation);
                     multigrid_prolongation_linear_on_nonuniform_grid(mg_sdm[l].r, mg_sdm[l+1].x,
                                                      &mg_sdm[l], &mg_sdm[l+1], l);
-    
+                    timer_stamp(17,STAMP_prolongation);
 
+                    timer_stamp0(STAMP_LEVEL);
                     nx = mg_sdm[l].nx;
                     ny = mg_sdm[l].ny;
                     nz = mg_sdm[l].nz;
@@ -2971,16 +3410,24 @@ if (myrank == 0) {
                     for (i = 0; i < size; i++) {
                         mg_sdm[l].x[i] += mg_sdm[l].r[i];
                     }
-
+                    timer_stamp(10,STAMP_COMP);
+                    timer_stamp0(STAMP_smooth);
                     rbgs_iterator_poisson_matrix(mg_sdm[l].x, &mg_a_poisson[l], mg_sdm[l].b,
                                  &mg_sdm[l], maxiteration, omega_sor, mg_sdm[l].is_aggregated);
+                    timer_stamp(15,STAMP_smooth);
+                    timer_stamp(6,STAMP_LEVEL);
                 }
 
                 // Prolongation to actual solution
+                timer_stamp0(STAMP_COMM_NEIGHBOR);
                 geometry_halocell_update_selectively(mg_sdm[1].x, &mg_sdm[1], mg_sdm[1].is_aggregated);
+                timer_stamp(11,STAMP_COMM_NEIGHBOR);
 
+                timer_stamp0(STAMP_COMP);
+                timer_stamp0(STAMP_prolongation);
                 multigrid_prolongation_linear_on_nonuniform_grid(rsd, mg_sdm[1].x, sdm, &mg_sdm[1], 0);
-
+                timer_stamp(17,STAMP_prolongation);
+                timer_stamp0(STAMP_LEVEL);
                 nx = sdm->nx;
                 ny = sdm->ny;
                 nz = sdm->nz;
@@ -2988,10 +3435,15 @@ if (myrank == 0) {
                 for (i = 0; i < size; i++) {
                     sol[i] += rsd[i];
                 }
-
+                timer_stamp(10,STAMP_COMP);
+                timer_stamp0(STAMP_smooth);
                 rbgs_iterator_poisson_matrix(sol, a_poisson, rhs, sdm, maxiteration, omega_sor, sdm->is_aggregated);
-
+                timer_stamp(15,STAMP_smooth);
+                timer_stamp(5,STAMP_LEVEL);
+                
+                timer_stamp0(STAMP_residual);
                 multigrid_residual(rsd, a_poisson, sol, rhs, sdm, sdm->is_aggregated);
+                timer_stamp(18,STAMP_residual);
 
                 vv_dot_3d_matrix(&rsd_val, rsd, rsd, nx, ny, nz, sdm->is_aggregated);
 

@@ -1,16 +1,30 @@
-# Compiler and complilation flag are included in Makefile.inc
-include Makefile.inc
+.PHONY: all cpu gpu clean clean_cpu clean_gpu
 
-lib:
-	mkdir -p include;mkdir -p lib
-	cd src; mkdir -p obj; make all
+# The default build of this directory is the CPU version, so that
+# `make LANG=C all` from the top level matches the Fortran side.
+all: cpu
 
-example:
-	cd examples; make all
+cpu:
+	mkdir -p include lib
+	module purge; \
+	module load gcc/15.2.0; \
+	module load mpi/openmpi-4.1.8; \
+	cd src/cpu; \
+	mkdir -p obj; \
+	$(MAKE) all
 
-all:
-	mkdir -p include; mkdir -p lib
-	cd src; mkdir -p obj; make all
+gpu:
+	mkdir -p include lib
+	module purge; \
+	module load nvhpc/25.11_; \
+	cd src/gpu; \
+	mkdir -p obj; \
+	$(MAKE) all
 
-clean:
-	cd src; make clean
+clean: clean_cpu clean_gpu
+
+clean_cpu:
+	cd src/cpu; make clean
+
+clean_gpu:
+	cd src/gpu; make clean

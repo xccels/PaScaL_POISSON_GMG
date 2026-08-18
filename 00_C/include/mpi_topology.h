@@ -3,7 +3,7 @@
 
 #include <mpi.h>
 #include <stdbool.h>
-#include "global.h"
+// #include "global.h"
 
 #define NDIMS 3
 
@@ -27,8 +27,19 @@ typedef struct {
 
 extern boundary_comm comm_boundary;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void mpi_topology_create(void);
 void mpi_topology_destroy(void);
 void mpi_boundary_create(void);
+
+#ifdef __cplusplus
+}
+#endif
+// void mpi_topology_create(void);
+// void mpi_topology_destroy(void);
+// void mpi_boundary_create(void);
 
 #endif // MPI_TOPOLOGY_H

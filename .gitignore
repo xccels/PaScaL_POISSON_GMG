@@ -1,0 +1,52 @@
+# =============================================================================
+# Build outputs.
+#
+# Every path below is produced by a Makefile and removed by its clean target,
+# so nothing under version control lives in them.
+#
+# Deliberately NOT ignored:
+#   00_C/include/   hand-written headers (geometry.h, multigrid.h, ...), not
+#                   generated -- unlike the include/ trees on the Fortran side.
+#   00_C/cpu.sh,    job scripts are part of the deliverable.
+#   00_C/gpu.sh
+#   doc/            Doxygen assets (header.html, home.ico, home.png).
+#   run/PARA_INPUT.inp
+#                   the reference problem definition, not build output.
+# =============================================================================
+
+# Object files, Fortran modules, libraries
+*.o
+*.mod
+*.smod
+*.a
+*.so
+
+# Object trees, at any level
+obj/
+
+# Directories the Makefiles create empty via `mkdir -p include lib`
+00_C/lib/
+01_Fortran/include/
+01_Fortran/lib/
+
+# Solver binaries
+00_C/run/poisson
+00_C/run/test_poisson
+01_Fortran/run/a.out
+
+# Solution dumps written by the solvers (`mkdir -p run/result`)
+*/run/result/
+
+# =============================================================================
+# Site-specific run leftovers.
+#
+# cpu.sh / gpu.sh direct the scheduler to `run/%x.o%j` and `run/%x.e%j`, which
+# lands files such as run/GMG_C_core2.o28258 next to the binaries.
+# =============================================================================
+*.o[0-9]*
+*.e[0-9]*
+
+# Editor / OS noise
+.vscode/
+.history/
+.DS_Store

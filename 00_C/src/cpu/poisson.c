@@ -9,13 +9,15 @@
 #include "mpi_topology.h"
 #include "para_range.h"
 #include "rbgs_poisson_matrix.h" 
-#include "global.h"    
+// #include "global.h" 
+#include "timer.h"    
 
 #define PI 3.14159265358979323846
 
-#define IDX(i,j,k, nx,ny,nz) ((i)*(ny+2)*(nz+2) + (j)*(nz+2) + (k))
+// #define IDX(i,j,k, nx,ny,nz) ((i)*(ny+2)*(nz+2) + (j)*(nz+2) + (k))
+#define IDX(i,j,k, ni, nj) ((i)*(ni) + (j)*(nj) + (k))
 
-int nprocs, myrank;
+// int nprocs, myrank;
 
 void output(double *phi, double *xg, double *yg)
 {
@@ -28,17 +30,17 @@ void output(double *phi, double *xg, double *yg)
    fprintf(file, "i=%d ",256);
    fprintf(file, "j=%d\n",256);
 
-   for (i = 1; i <= 256; i++)
-   {
-      for (j = 1; j <= 256; j++)
-      {
-        idx = IDX(i,j,128,256,256,256);
-        fprintf(file, "%.6f  ", xg[i]);
-        fprintf(file, "%.6f  ", yg[j]);
-        fprintf(file, "%e  ", phi[idx]);
-        fprintf(file, "\n");
-      }
-   }
+//    for (i = 1; i <= 256; i++)
+//    {
+//       for (j = 1; j <= 256; j++)
+//       {
+//         idx = IDX(i,j,k,);
+//         fprintf(file, "%.6f  ", xg[i]);
+//         fprintf(file, "%.6f  ", yg[j]);
+//         fprintf(file, "%e  ", phi[idx]);
+//         fprintf(file, "\n");
+//       }
+//    }
 
    fclose(file);
 }
@@ -140,8 +142,40 @@ int main(int argc, char** argv)
     // printf("alpha_x=%lf alpha_y=%lf alpha_z=%lf\n", alpha_x, alpha_y, alpha_z);
 
 
+
+    char timer_str[TIMER_MAX][TIMER_STRLEN + 1];
+    for (int i = 0; i < TIMER_MAX; ++i) {
+        strncpy(timer_str[i], "null", TIMER_STRLEN);
+        timer_str[i][TIMER_STRLEN] = '\0';
+    }
+
+    strcpy(timer_str[0],  "[Main] multigrid_create             ");
+    strcpy(timer_str[1],  "[Main] multigrid_solve_vcycle       ");
+    strcpy(timer_str[2],  "[Main]            ");
+    strcpy(timer_str[3],  "[Main]                ");
+    strcpy(timer_str[4],  "[level] finest                      ");
+    strcpy(timer_str[5],  "[level] intermediate                ");
+    strcpy(timer_str[6],  "[level] coarest                     ");
+    strcpy(timer_str[7],  "[level] aggregation                 ");
+    strcpy(timer_str[8],  "[level]                     ");
+    strcpy(timer_str[9],  "[com] computation                   ");
+    strcpy(timer_str[10], "[com] comm_neighbor                 ");
+    strcpy(timer_str[11], "[com] comm_Allreduce                ");
+    strcpy(timer_str[12], "[com] Gather                        ");
+    strcpy(timer_str[13], "[com] Scatter                       ");
+
+    strcpy(timer_str[14], "[divide] smooth                     ");
+    strcpy(timer_str[15], "[divide] restriction                ");
+    strcpy(timer_str[16], "[divide] prolongation               ");
+    strcpy(timer_str[17], "[divide] residual                   ");
+
+    
+
     for(times=1; times<=1; times++)
     {
+        timer_init(18, timer_str);
+        
+        t0 = MPI_Wtime();
         np_dim[0] = npx; np_dim[1] = npy; np_dim[2] = npz;
         period[0] = period[1] = period[2] = 0;
         mpi_topology_create();
@@ -156,13 +190,15 @@ int main(int argc, char** argv)
         size_t size3d = (s_domain.nx + 2) * (s_domain.ny + 2) * (s_domain.nz + 2);
         ref_sub = calloc(size3d, sizeof(double));
 
+        int ni = (s_domain.ny+2)*(s_domain.nz+2);
+        int nj = (s_domain.nz+2);
         for (i = 1; i <= s_domain.nx; i++)
         {
            for (j = 1; j <= s_domain.ny; j++)
            {
                 for (k = 1; k <= s_domain.nz; k++)
                 {
-                    idx = IDX(i,j,k,s_domain.nx,s_domain.ny,s_domain.nz);
+                    idx = IDX(i,j,k,ni,nj);
                     s_domain.x[idx] = 0.0;
                     s_domain.b[idx] = -cos(s_domain.xg[i] * PI) * cos(s_domain.yg[j] * PI) * cos(s_domain.zg[k] * PI) * 3.0 * PI * PI;
                     ref_sub[idx] = cos(s_domain.xg[i] * PI) * cos(s_domain.yg[j] * PI) * cos(s_domain.zg[k] * PI);
@@ -174,7 +210,10 @@ int main(int argc, char** argv)
             printf("[Poisson] Geometry and rhs constructed.\n");
         }
 
+        timer_stamp0(STAMP_COMP);
         matrix_poisson_create(&a_poisson, &s_domain);
+        timer_stamp(10,STAMP_COMP);
+
         if (myrank == 0) {
             printf("[Poisson] Poisson matrix constructed.\n");
         }
@@ -183,13 +222,23 @@ int main(int argc, char** argv)
             printf("[Poisson] Start solving equations.\n");
         }
 
-        t0 = MPI_Wtime();
-
-        multigrid_create(&s_domain, number_of_levels, number_of_vcycles, aggregation_method, aggregation_level);
-        multigrid_solve_vcycle(s_domain.x, &a_poisson, s_domain.b, &s_domain, maxiteration, tolerance, omega_sor);
-        multigrid_destroy();
         
 
+        
+        
+        
+        timer_stamp0(STAMP_MAIN);
+        multigrid_create(&s_domain, number_of_levels, number_of_vcycles, aggregation_method, aggregation_level);
+        timer_stamp(1, STAMP_MAIN);
+
+        // printf("[Poisson] myrank=%d, nx=%d, ny=%d, nz=%d.\n", myrank, s_domain.nx, s_domain.ny, s_domain.nz);
+
+        multigrid_solve_vcycle(s_domain.x, &a_poisson, s_domain.b, &s_domain, maxiteration, tolerance, omega_sor);
+        timer_stamp(2, STAMP_MAIN);
+        
+        multigrid_destroy();
+
+        timer_stamp0(STAMP_COMP);
         rms = 0.0;
         rms_local = 0.0;
         for (i = 1; i <= s_domain.nx; i++)
@@ -198,18 +247,23 @@ int main(int argc, char** argv)
            {
                 for (k = 1; k <= s_domain.nz; k++)
                 {
-                    // printf("[Error3] \n");
-                    idx = IDX(i,j,k,s_domain.nx,s_domain.ny,s_domain.nz);
+                    idx = IDX(i,j,k,ni,nj);
                     rms_local = rms_local + (s_domain.x[idx] - ref_sub[idx]) * (s_domain.x[idx] - ref_sub[idx]);
                 }
            }
         }
-        // printf("[Error1] \n");
-        // output(s_domain.x, s_domain.xg, s_domain.yg);
-        // printf("[Error2] \n");
+        timer_stamp(10,STAMP_COMP);
+        
 
+        timer_stamp0(STAMP_COMM_ALLREDUCE);
         MPI_Allreduce(&rms_local, &rms, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        // printf("[Error3] \n");
+        timer_stamp(12,STAMP_COMM_ALLREDUCE);
+
+
+        timer_reduction(MPI_COMM_WORLD);
+        timer_output(myrank, nprocs);
+
+
         if (myrank == 0) {
             printf("[Poisson] RMS = %e\n", rms / (g_domain.nx * g_domain.ny * g_domain.nz));
             printf("[Poisson] Solution obtained. Execution time = %f\n", MPI_Wtime() - t0);
@@ -231,7 +285,6 @@ int main(int argc, char** argv)
 
 
     }
-    
 
    
     MPI_Finalize();

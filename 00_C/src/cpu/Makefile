@@ -1,18 +1,18 @@
-HOME = ..
-include $(HOME)/Makefile.inc
+HOME = ../..
+include $(HOME)/Makefile_cpu.inc
 
-# 可执行文件名，改成和你命令行一致的名字
 EXE = poisson
 
 OBJDIR = ./obj
-SRC_DIR = ./src  # 目前没用到，但保留无所谓
+SRC_DIR = ./src  
 
 # List of source modules (without extension)
-MODULES = para_range mpi_topology geometry matrix multigrid \
+MODULES = timer para_range mpi_topology geometry matrix multigrid \
           poisson_matrix_operator rbgs_poisson_matrix poisson
 
-# Generate object file paths（你原来是手写，这里可以继续手写或用 MODULES）
-OBJS = $(OBJDIR)/para_range.o \
+# Generate object file paths
+OBJS = $(OBJDIR)/timer.o \
+	   $(OBJDIR)/para_range.o \
        $(OBJDIR)/mpi_topology.o \
        $(OBJDIR)/geometry.o \
        $(OBJDIR)/matrix.o \
@@ -43,3 +43,6 @@ clean:
 	rm -rf $(HOME)/run/result
 
 .PHONY: all clean directories
+
+# module load gcc/15.2.0 
+# module load mpi/openmpi-4.1.8 
